@@ -1,9 +1,5 @@
-﻿using Steamworks.Data;
-using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Steamworks.ServerList
@@ -31,16 +27,17 @@ namespace Steamworks.ServerList
 			var ips = Ips.ToArray();
 
 			QueryEndReason ret = QueryEndReason.EndOfRefresh;
+			wantsCancel = false;
 
-			while ( true )
+			while ( !wantsCancel )
 			{
-				var sublist = ips.Skip( pointer ).Take( blockSize );
-				if ( sublist.Count() == 0 )
+				var sublist = ips.Skip( pointer ).Take( blockSize ).ToList();
+				if ( sublist.Count == 0 )
 					break;
 
 				using ( var list = new ServerList.Internet() )
 				{
-					list.AddFilter( "or", sublist.Count().ToString() );
+					list.AddFilter( "or", sublist.Count.ToString() );
 
 					foreach ( var server in sublist )
 					{
@@ -66,8 +63,16 @@ namespace Steamworks.ServerList
 			return ret;
 		}
 
+		// note: Cancel doesn't get called in Dispose because request is always null for this class
 		public override void Cancel()
 		{
+			wantsCancel = true;
+		}
+
+		public override void Dispose()
+		{
+			base.Dispose();
+
 			wantsCancel = true;
 		}
 	}

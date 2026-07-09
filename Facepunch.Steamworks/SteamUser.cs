@@ -314,7 +314,7 @@ namespace Steamworks
 		/// </summary>
 		public static unsafe AuthTicket GetAuthSessionTicket( NetIdentity identity )
 		{
-			var data = Helpers.TakeBuffer( 1024 );
+			var data = Helpers.TakeBuffer( 2560 );
 
 			fixed ( byte* b = data )
 			{
@@ -465,6 +465,21 @@ namespace Steamworks
 		/// This is only valid if the user is connected to the Steam servers and may not catch all forms of NAT.
 		/// </summary>
 		public static bool IsBehindNAT => Internal.BIsBehindNAT();
+
+		/// <summary>
+		/// Set data to be replicated to friends so that they can join your game.
+		/// Sets the "current server" the user is on for the friends list / rich presence
+		/// join flow. Pass a zero <paramref name="gameServerId"/> and 0/0 to clear.
+		/// (Studio addition — previously shipped only in the compiled binaries; source
+		/// restored here so the DLL is reproducible from this repo.)
+		/// </summary>
+		/// <param name="gameServerId">The SteamID of the game server the user is playing on.</param>
+		/// <param name="ip">The IPv4 address of the server, host order.</param>
+		/// <param name="port">The connection port of the server.</param>
+		public static void AdvertiseGame( SteamId gameServerId, uint ip, ushort port )
+		{
+			Internal.AdvertiseGame( gameServerId, ip, port );
+		}
 
 		/// <summary>
 		/// Gets the Steam level of the user, as shown on their Steam community profile.

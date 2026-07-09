@@ -15,11 +15,13 @@ using System.Threading.Tasks;
 
 internal class FetchStringType : BaseType
 {
+	public string BufferSizeParamName; // optional, use next parameter if not set
+	
 	public override string TypeName => $"string";
 	public override string AsArgument() => $"out string {VarName}";
 
 	public override string AsNativeArgument() => $"IntPtr {VarName}";
 
-	public override string AsCallArgument() => $"mem{VarName}";
+	public override string AsCallArgument() => $"mem__{VarName}";
 	public override string Ref => "";
 }

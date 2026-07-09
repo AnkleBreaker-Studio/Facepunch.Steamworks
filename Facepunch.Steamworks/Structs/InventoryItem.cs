@@ -100,18 +100,31 @@ namespace Steamworks
 
 		internal static Dictionary<string, string> GetProperties( SteamInventoryResult_t result, int index )
 		{
-			var strlen = (uint) Helpers.MemoryBufferSize;
-
-			if ( !SteamInventory.Internal.GetResultItemProperty( result, (uint)index, null, out var propNames, ref strlen ) )
+			if ( !SteamInventory.Internal.GetResultItemProperty( result, (uint)index, null, out var propNames ) )
 				return null;
 
 			var props = new Dictionary<string, string>();
 
 			foreach ( var propertyName in propNames.Split( ',' ) )
 			{
-				strlen = (uint)Helpers.MemoryBufferSize;
+				if ( SteamInventory.Internal.GetResultItemProperty( result, (uint)index, propertyName, out var strVal ) )
+				{
+					props.Add( propertyName, strVal );
+				}
+			}
 
-				if ( SteamInventory.Internal.GetResultItemProperty( result, (uint)index, propertyName, out var strVal, ref strlen ) )
+			return props;
+		}
+
+		internal static Dictionary<string, string> GetProperties( SteamInventoryResult_t result, int index, string[] propertyNames )
+		{
+			// Only fetch the requested properties. This skips the "list all property names" call and avoids reading properties we don't care about
+			// Each property is a separate native call, so for large result sets it can't be super slow
+			var props = new Dictionary<string, string>( propertyNames.Length );
+
+			foreach ( var propertyName in propertyNames )
+			{
+				if ( SteamInventory.Internal.GetResultItemProperty( result, (uint)index, propertyName, out var strVal ) )
 				{
 					props.Add( propertyName, strVal );
 				}
