@@ -96,7 +96,8 @@ namespace Steamworks.Data
 		public static implicit operator NetIdentity( string value )
 		{
 			NetIdentity id = default;
-			InternalSetGenericString( ref id, value );
+			using var str = new Utf8StringToNative( value );
+			InternalSetGenericString( ref id, str.Pointer );
 			return id;
 		}
 
