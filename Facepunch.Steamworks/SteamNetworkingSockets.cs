@@ -97,18 +97,18 @@ namespace Steamworks
 			//
 			// This is a message from/to a listen socket
 			//
-			if ( data.Nfo.listenSocket.Id > 0 )
+			if ( data.Info.listenSocket.Id > 0 )
 			{
-				var iface = GetSocketManager( data.Nfo.listenSocket.Id );
-				iface?.OnConnectionChanged( data.Conn, data.Nfo );
+				var iface = GetSocketManager( data.Info.listenSocket.Id );
+				iface?.OnConnectionChanged( data.Conn, data.Info );
 			}
 			else
 			{
 				var iface = GetConnectionManager( data.Conn.Id );
-				iface?.OnConnectionChanged( data.Nfo );
+				iface?.OnConnectionChanged( data.Info );
 			}
 
-			OnConnectionStatusChanged?.Invoke( data.Conn, data.Nfo );
+			OnConnectionStatusChanged?.Invoke( data.Conn, data.Info );
 		}
 
 		public static event Action<Connection, ConnectionInfo> OnConnectionStatusChanged;

@@ -1,9 +1,6 @@
 ﻿using Steamworks.Data;
 using System;
-using System.Collections.Generic;
-using System.Drawing;
 using System.Runtime.InteropServices;
-using System.Text;
 
 namespace Steamworks
 {
@@ -36,8 +33,8 @@ namespace Steamworks
 
 		internal static void InstallEvents( bool server )
 		{
-			Dispatch.Install<SteamNetworkingMessagesSessionRequest_t>( x => OnSessionRequest?.Invoke( x.DentityRemote), server );
-			Dispatch.Install<SteamNetworkingMessagesSessionFailed_t>( x => OnSessionFailed?.Invoke( x.Nfo), server );
+			Dispatch.Install<SteamNetworkingMessagesSessionRequest_t>( x => OnSessionRequest?.Invoke( x.IdentityRemote), server );
+			Dispatch.Install<SteamNetworkingMessagesSessionFailed_t>( x => OnSessionFailed?.Invoke( x.Info), server );
 		}
 
 		public static Action<NetIdentity> OnSessionRequest;
@@ -57,6 +54,36 @@ namespace Steamworks
 				return Internal.SendMessageToUser( ref identity, (IntPtr)p, length, (int)flags, channel );
 			}
 		}
+
+		/// <summary>
+		/// Raw send — the caller owns the buffer. Zero managed allocation;
+		/// pairs with pooled/pinned buffers or native memory.
+		/// </summary>
+		public static Result SendMessageToUser( ref NetIdentity identity, IntPtr data, uint length, SteamNetworkingOptions flags, int channel )
+		{
+			return Internal.SendMessageToUser( ref identity, data, length, (int)flags, channel );
+		}
+
+#if NETSTANDARD2_1_OR_GREATER || NET
+		/// <summary>
+		/// Span send — zero managed allocation (slices of pooled arrays,
+		/// stackalloc, etc.). Available on netstandard2.1+/.NET builds.
+		/// </summary>
+		public static unsafe Result SendMessageToUser( ref NetIdentity identity, ReadOnlySpan<byte> data, SteamNetworkingOptions flags, int channel )
+		{
+			fixed ( byte* p = data )
+			{
+				return Internal.SendMessageToUser( ref identity, (IntPtr)p, (uint)data.Length, (int)flags, channel );
+			}
+		}
+#endif
+
+		/// <summary>
+		/// Zero-copy message delivery: the buffer belongs to Steam and is only
+		/// valid for the duration of the callback — copy it if you keep it.
+		/// Mirrors the sockets-layer <c>OnMessage( IntPtr, int, … )</c> contract.
+		/// </summary>
+		public delegate void MessageIntercept( NetIdentity identity, int channel, IntPtr data, int size );
 
 		public unsafe static int ReceiveMessagesOnChannel( int channel, Action<SteamId, int, byte[]> callback, int bufferSize = 32, bool receiveToEnd = true )
 		{
@@ -114,6 +141,67 @@ namespace Steamworks
 				//
 				// Releases the message
 				//
+				NetMsg.InternalRelease( msg );
+				msg = null;
+			}
+		}
+
+		/// <summary>
+		/// ZERO-ALLOCATION receive: drains up to <paramref name="bufferSize"/>
+		/// messages per native call and hands each to
+		/// <paramref name="onMessage"/> as a raw pointer + size. The buffer is
+		/// Steam-owned and freed when the callback returns — copy it (into a
+		/// pooled buffer) if it must outlive the call. Unlike the
+		/// <c>byte[]</c> overload, this allocates NOTHING per message, which
+		/// is what a per-frame network pump wants.
+		/// </summary>
+		public unsafe static int ReceiveMessagesOnChannel( int channel, MessageIntercept onMessage, int bufferSize = 32, bool receiveToEnd = true )
+		{
+			if ( bufferSize < 1 || bufferSize > 256 ) throw new ArgumentOutOfRangeException( nameof( bufferSize ) );
+
+			int totalProcessed = 0;
+			NetMsg** messageBuffer = stackalloc NetMsg*[bufferSize];
+
+			while ( true )
+			{
+				int processed = Internal.ReceiveMessagesOnChannel( channel, new IntPtr( &messageBuffer[0] ), bufferSize );
+				totalProcessed += processed;
+
+				try
+				{
+					for ( int i = 0; i < processed; i++ )
+					{
+						ReceiveMessageIntercept( ref messageBuffer[i], onMessage );
+					}
+				}
+				catch
+				{
+					for ( int i = 0; i < processed; i++ )
+					{
+						if ( messageBuffer[i] != null )
+						{
+							NetMsg.InternalRelease( messageBuffer[i] );
+						}
+					}
+
+					throw;
+				}
+
+				if ( !receiveToEnd || processed < bufferSize )
+					break;
+			}
+
+			return totalProcessed;
+		}
+
+		internal unsafe static void ReceiveMessageIntercept( ref NetMsg* msg, MessageIntercept onMessage )
+		{
+			try
+			{
+				onMessage( msg->Identity, msg->Channel, msg->DataPtr, msg->DataSize );
+			}
+			finally
+			{
 				NetMsg.InternalRelease( msg );
 				msg = null;
 			}

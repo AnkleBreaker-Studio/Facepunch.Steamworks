@@ -15,6 +15,10 @@ namespace Generator
             if ( m == "m_itemId" ) return "ItemId";
             if ( m == "m_handle" ) return "Handle";
             if (m == "m_result") return "Result";
+            // The greedy prefix strips below eat the first letter of real
+            // words: m_identityRemote -> "DentityRemote", m_info -> "Nfo".
+            if ( m == "m_identityRemote" ) return "IdentityRemote";
+            if ( m == "m_info" ) return "Info";
 
             var cleanName = m.Replace( "m_un", "" )
                     .Replace( "m_us", "" )
