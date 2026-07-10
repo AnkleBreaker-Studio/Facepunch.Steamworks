@@ -17,6 +17,12 @@ namespace Steamworks
 	[DeploymentItem( "steam_api.dll" )]
 	public class NetworkingMessagesTest
 	{
+		// Reset the one-way dispatch-exception latch before each test so a
+		// callback exception can only fail the test that actually caused it
+		// (CTO Pass-3.1 test-isolation hardening).
+		[TestInitialize]
+		public void ResetDispatchLatch() => AppTest.LastDispatchException = null;
+
 		[TestMethod]
 		public void ReceiveMessagesOnChannel_LiveDrain_CallableAndNoPayloadAlloc()
 		{
