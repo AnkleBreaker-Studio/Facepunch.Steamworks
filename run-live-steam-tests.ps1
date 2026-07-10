@@ -33,12 +33,16 @@ $outDir = Join-Path $repo "Facepunch.Steamworks.Test\bin\Release\net6.0"
 New-Item -ItemType Directory -Force $outDir | Out-Null
 Set-Content -Path (Join-Path $outDir "steam_appid.txt") -Value "1442910" -NoNewline -Encoding ascii
 
-# 3. Read-only subset by default (no server-list network hammering, no input VDF).
+# 3. Read-only + NetworkingMessages subset by default (no server-list network
+#    hammering, no input VDF, no encrypted-app-ticket key requirement, no random
+#    avatar-image callbacks). Includes NetworkingMessagesTest so the zero-alloc
+#    receive + Span/IntPtr send overloads are exercised live, not just compiled.
 $filter = if ($Full) { "" } else {
-    'FullyQualifiedName~AppTest|FullyQualifiedName~FriendsTest|FullyQualifiedName~UserTest|FullyQualifiedName~UgcTest|FullyQualifiedName~InventoryTest'
+    'FullyQualifiedName~AppTest|FullyQualifiedName~FriendsTest&FullyQualifiedName!~Avatar|FullyQualifiedName~NetworkingMessagesTest'
 }
 
-$args = @("test", $proj, "-c", "Release", "--logger", "trx;LogFileName=live-steam.trx")
+# --blame-hang-timeout so no single environment-dependent test can hang the run.
+$args = @("test", $proj, "-c", "Release", "--blame-hang-timeout", "90s", "--logger", "trx;LogFileName=live-steam.trx")
 if ($filter) { $args += @("--filter", $filter) }
 
 Write-Host "Running $($(if($Full){'FULL'}else{'read-only subset'})) live-Steam suite..."

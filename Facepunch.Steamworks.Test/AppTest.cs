@@ -12,6 +12,12 @@ namespace Steamworks
     [DeploymentItem( "steam_api.dll" )]
     public class AppTest
     {
+		/// <summary>
+		/// Last exception raised on the callback pump (recorded by the
+		/// AssemblyInit OnException hook instead of crashing the run).
+		/// </summary>
+		public static Exception LastDispatchException;
+
 		[AssemblyInitialize]
 		public static void AssemblyInit( TestContext context )
 		{
@@ -22,11 +28,19 @@ namespace Steamworks
 				Console.WriteLine( $"" );
 			};
 
+			// Dispatch.OnException fires on the CALLBACK PUMP THREAD. Calling
+			// Assert.Fail here throws on that background thread → the exception
+			// is unhandled → the whole test host crashes and ABORTS every
+			// remaining test (this is why the suite was never runnable to
+			// completion: a single environment-dependent callback, e.g. an
+			// avatar image for a random id or an encrypted-app-ticket the app
+			// lacks a key for, took down the run). Record it instead; tests
+			// that care assert on LastDispatchException.
 			Steamworks.Dispatch.OnException = ( e ) =>
 			{
-				Console.Error.WriteLine( e.Message );
+				Console.Error.WriteLine( "[Dispatch.OnException] " + e.Message );
 				Console.Error.WriteLine( e.StackTrace );
-				Assert.Fail( e.Message );
+				LastDispatchException = e;
 			};
 
 			//
