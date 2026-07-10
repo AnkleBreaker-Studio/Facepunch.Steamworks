@@ -3109,7 +3109,7 @@ namespace Steamworks.Data
 	internal struct SteamNetworkingFakeIPResult_t : ICallbackData
 	{
 		internal Result Result; // m_eResult EResult
-		internal NetIdentity Dentity; // m_identity SteamNetworkingIdentity
+		internal NetIdentity Identity; // m_identity SteamNetworkingIdentity
 		internal uint IP; // m_unIP uint32
 		[MarshalAs(UnmanagedType.ByValArray, SizeConst = 8, ArraySubType = UnmanagedType.U2)]
 		internal ushort[] Ports; // m_unPorts uint16 [8]

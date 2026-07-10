@@ -183,8 +183,8 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct SteamDatagramGameCoordinatorServerLogin
 	{
-		internal NetIdentity Dentity; // m_identity SteamNetworkingIdentity
-		internal SteamDatagramHostedAddress Outing; // m_routing SteamDatagramHostedAddress
+		internal NetIdentity Identity; // m_identity SteamNetworkingIdentity
+		internal SteamDatagramHostedAddress Routing; // m_routing SteamDatagramHostedAddress
 		internal AppId AppID; // m_nAppID AppId_t
 		internal uint Time; // m_rtime RTime32
 		internal int CbAppData; // m_cbAppData int
