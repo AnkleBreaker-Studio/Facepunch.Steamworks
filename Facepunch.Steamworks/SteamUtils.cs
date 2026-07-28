@@ -309,9 +309,88 @@ namespace Steamworks
 		/// </summary>
 		public static void SetGameLauncherMode( bool mode ) => Internal.SetGameLauncherMode( mode );
 
-		//public void ShowFloatingGamepadTextInput( TextInputMode mode, int left, int top, int width, int height )
-		//{
-		//	Internal.ShowFloatingGamepadTextInput( mode, left, top, width, height );
-		//}
+		/// <summary>
+		/// Opens the Steam Deck's floating on-screen keyboard next to one of your own text
+		/// fields, instead of taking over the whole screen.
+		/// </summary>
+		/// <param name="mode">Which keyboard layout to show — e.g. <see cref="TextInputMode.Numeric"/> for a number pad.</param>
+		/// <param name="textFieldLeft">X position of your text field, in pixels from the left of the window.</param>
+		/// <param name="textFieldTop">Y position of your text field, in pixels from the top of the window.</param>
+		/// <param name="textFieldWidth">Width of your text field, in pixels.</param>
+		/// <param name="textFieldHeight">Height of your text field, in pixels.</param>
+		/// <returns><see langword="false"/> if the floating keyboard could not be shown.</returns>
+		/// <remarks>
+		/// <para>
+		/// <b>This works differently from <see cref="ShowGamepadTextInput"/>, and the difference
+		/// catches people out.</b> <c>ShowGamepadTextInput</c> opens a full-screen Steam overlay
+		/// that captures the text for you, and you collect the result afterwards with
+		/// <see cref="GetEnteredGamepadText"/>. This one does not: it just floats a keyboard
+		/// beside the rectangle you describe, and the keystrokes arrive through your game's
+		/// <b>normal text input path</b>, exactly as if a physical keyboard were being typed on.
+		/// You keep ownership of the text field and its contents.
+		/// </para>
+		/// <para>
+		/// The rectangle is only a hint about where <i>not</i> to cover — Steam positions the
+		/// keyboard so it does not obscure that area. Pass your field's real on-screen bounds in
+		/// window pixel coordinates.
+		/// </para>
+		/// <para>
+		/// This is a Steam Deck / Big Picture feature. On a normal desktop with no gamepad
+		/// context it typically returns <see langword="false"/> and does nothing, which is not an
+		/// error — you should still show your own field and let a physical keyboard work.
+		/// <see cref="IsRunningOnSteamDeck"/> is the usual thing to branch on.
+		/// </para>
+		/// <para>
+		/// Dismissal is your responsibility: call
+		/// <see cref="DismissFloatingGamepadTextInput"/> when your field loses focus. Unlike the
+		/// full-screen version there is no "submitted" callback, because there is nothing to
+		/// submit — you already have the text.
+		/// </para>
+		/// <example>
+		/// <code>
+		/// // When the player focuses a text box:
+		/// var r = myTextBox.ScreenRect;
+		/// SteamUtils.ShowFloatingGamepadTextInput( TextInputMode.SingleLine, r.X, r.Y, r.Width, r.Height );
+		///
+		/// // When it loses focus:
+		/// SteamUtils.DismissFloatingGamepadTextInput();
+		/// </code>
+		/// </example>
+		/// </remarks>
+		public static bool ShowFloatingGamepadTextInput( TextInputMode mode, int textFieldLeft, int textFieldTop, int textFieldWidth, int textFieldHeight )
+		{
+			return Internal.ShowFloatingGamepadTextInput( mode, textFieldLeft, textFieldTop, textFieldWidth, textFieldHeight );
+		}
+
+		/// <summary>
+		/// Closes the floating on-screen keyboard opened by
+		/// <see cref="ShowFloatingGamepadTextInput"/>.
+		/// </summary>
+		/// <returns><see langword="false"/> if there was no floating keyboard to dismiss.</returns>
+		/// <remarks>
+		/// Call this when your text field loses focus. The floating keyboard does not close
+		/// itself, so skipping this leaves it on screen over your game.
+		/// </remarks>
+		public static bool DismissFloatingGamepadTextInput()
+		{
+			return Internal.DismissFloatingGamepadTextInput();
+		}
+
+		/// <summary>
+		/// Closes the full-screen gamepad text entry opened by
+		/// <see cref="ShowGamepadTextInput"/>.
+		/// </summary>
+		/// <returns><see langword="false"/> if the full-screen text entry was not open.</returns>
+		/// <remarks>
+		/// Normally the player dismisses this themselves and you receive
+		/// <see cref="OnGamepadTextInputDismissed"/>. Use this to close it programmatically —
+		/// for example when the player disconnects, or your UI navigates away underneath it.
+		/// Note this is the counterpart to <see cref="ShowGamepadTextInput"/>, not to the
+		/// floating keyboard; those have separate dismiss calls.
+		/// </remarks>
+		public static bool DismissGamepadTextInput()
+		{
+			return Internal.DismissGamepadTextInput();
+		}
 	}
 }
