@@ -52,6 +52,14 @@ jobs:
     - name: Verify native export conformance
       run: powershell -ExecutionPolicy Bypass -File verify-native-conformance.ps1
 
+    # Pins the marshalled layout (size, pack, field offsets) of all 339 structs. Steam
+    # writes these directly into memory we read back, so a layout mismatch silently
+    # returns wrong data or reads past the buffer instead of throwing. The layouts come
+    # from the code generator, where one small change can re-lay-out dozens of structs at
+    # once - this makes that surface as a reviewable diff. Needs no Steam client.
+    - name: Verify struct layout baseline
+      run: powershell -ExecutionPolicy Bypass -File verify-struct-layout.ps1
+
     - uses: actions/upload-artifact@v4.4.3
       with:
         name: Compiled Files
