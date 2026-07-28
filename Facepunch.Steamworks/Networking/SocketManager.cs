@@ -25,6 +25,21 @@ namespace Steamworks
 
 		internal HSteamNetPollGroup pollGroup;
 
+		/// <summary>
+		/// The poll group this manager drains in <see cref="Receive"/>. Every connection it
+		/// accepts is added to this group, which is why one <see cref="Receive"/> call services
+		/// every client instead of one call per client.
+		///
+		/// <para>
+		/// Exposed so you can add connections this manager did not create — a connection you
+		/// opened yourself with <see cref="SteamNetworkingSockets.ConnectRelay{T}(SteamId, int)"/>,
+		/// for instance — and have their messages arrive through the same
+		/// <see cref="OnMessage"/> pump. Do not <see cref="Data.PollGroup.Destroy"/> it; this
+		/// manager owns it and destroys it in <see cref="Close"/>.
+		/// </para>
+		/// </summary>
+		public PollGroup PollGroup => new PollGroup { Id = pollGroup.Value };
+
 		internal void Initialize()
 		{
 			pollGroup = SteamNetworkingSockets.Internal.CreatePollGroup();
