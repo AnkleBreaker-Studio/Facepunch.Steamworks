@@ -22,14 +22,46 @@ namespace Steamworks
 			return true;
 		}
 
-		public static bool StatsRecieved { get; internal set; }
+		/// <summary>
+		/// Whether Steam has delivered this user's stats and achievements yet. Until this is
+		/// <see langword="true"/>, reads return zero/locked and writes are discarded.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Steam sends stats automatically shortly after <see cref="SteamClient.Init"/> — you
+		/// do not request them. This flips to <see langword="true"/> when the
+		/// <c>UserStatsReceived_t</c> callback for the local user arrives, which means it is
+		/// <b>false for the first few frames of your game</b>. Reading an achievement before
+		/// then reports it as locked, and writing a stat before then is silently lost.
+		/// </para>
+		/// <para>
+		/// Gate your stats code on this, or subscribe to <see cref="OnUserStatsReceived"/>.
+		/// Note it only ever becomes <see langword="true"/> while callbacks are being pumped
+		/// — see the getting-started guide on <c>asyncCallbacks</c>.
+		/// </para>
+		/// </remarks>
+		public static bool StatsReceived { get; internal set; }
+
+		/// <summary>
+		/// Whether Steam has delivered this user's stats and achievements yet.
+		/// </summary>
+		/// <remarks>
+		/// Misspelled. Use <see cref="StatsReceived"/> instead. Kept so existing code keeps
+		/// compiling; it reads and writes the same underlying state.
+		/// </remarks>
+		[Obsolete( "Misspelled - use StatsReceived instead. This forwards to it.", false )]
+		public static bool StatsRecieved
+		{
+			get => StatsReceived;
+			internal set => StatsReceived = value;
+		}
 
 		internal static void InstallEvents()
 		{
 			Dispatch.Install<UserStatsReceived_t>( x =>
 			{
 				if ( x.SteamIDUser == SteamClient.SteamId )
-					StatsRecieved = true;
+					StatsReceived = true;
 
 				OnUserStatsReceived?.Invoke( x.SteamIDUser, x.Result );
 			} );
@@ -85,11 +117,27 @@ namespace Steamworks
 		}
 
 		/// <summary>
-		/// Show the user a pop-up notification with the current progress toward an achievement.
-		/// Will return false if RequestCurrentStats has not completed and successfully returned 
-		/// its callback, if the achievement doesn't exist/has unpublished changes in the app's 
-		/// Steamworks Admin page, or if the achievement is unlocked. 
+		/// Show the user a pop-up notification with their current progress toward an
+		/// achievement — the "17 of 50 zombies killed" toast.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Returns <see langword="false"/>, without telling you which, if: stats have not
+		/// arrived yet (wait for <see cref="StatsReceived"/>), the achievement name does not
+		/// exist or has unpublished changes in the Steamworks Admin page, or the achievement
+		/// is already unlocked.
+		/// </para>
+		/// <para>
+		/// This <b>only shows a toast</b> — it does not record progress. To store progress
+		/// you set a stat and let Steam's achievement progress rules act on it. Calling this
+		/// without also storing a stat produces a notification that is forgotten immediately.
+		/// </para>
+		/// </remarks>
+		/// <param name="achName">The achievement's API name from the Steamworks Admin page (not its display name).</param>
+		/// <param name="curProg">Current progress. Must be less than <paramref name="maxProg"/>.</param>
+		/// <param name="maxProg">The value at which the achievement unlocks.</param>
+		/// <exception cref="ArgumentNullException"><paramref name="achName"/> is null or empty.</exception>
+		/// <exception cref="ArgumentException"><paramref name="curProg"/> is greater than or equal to <paramref name="maxProg"/>. Steam has nothing to show for a completed achievement — unlock it instead.</exception>
 		public static bool IndicateAchievementProgress( string achName, int curProg, int maxProg )
 		{
 			if ( string.IsNullOrEmpty( achName ) )
@@ -121,7 +169,7 @@ namespace Steamworks
 		/// If you have stats or achievements that you have saved locally but haven't uploaded with this function when your application process ends then this function will automatically be called.
 		/// You can find additional debug information written to the %steam_install%\logs\stats_log.txt file.
 		/// This function returns true upon success if :
-		/// RequestCurrentStats has completed and successfully returned its callback AND
+		/// <see cref="StatsReceived"/> is true AND
 		/// the current game has stats associated with it in the Steamworks Partner backend, and those stats are published.
 		/// </summary>
 		public static bool StoreStats()
@@ -142,11 +190,12 @@ namespace Steamworks
 		/// <summary>
 		/// Asynchronously fetches global stats data, which is available for stats marked as 
 		/// "aggregated" in the App Admin panel of the Steamworks website.
-		/// You must have called <see cref="RequestCurrentStats"/> and it needs to return successfully via 
-		/// its callback prior to calling this.
+		/// Stats must have arrived first — check <see cref="StatsReceived"/>, or wait for
+		/// <see cref="OnUserStatsReceived"/>. Steam delivers them automatically after
+		/// <see cref="SteamClient.Init"/>; there is nothing to request.
 		/// </summary>
 		/// <param name="days">How many days of day-by-day history to retrieve in addition to the overall totals. The limit is <c>60</c>.</param>
-		/// <returns><see cref="Result.OK"/> indicates success, <see cref="Result.InvalidState"/> means you need to call <see cref="RequestCurrentStats"/> first, <see cref="Result.Fail"/> means the remote call failed</returns>
+		/// <returns><see cref="Result.OK"/> indicates success, <see cref="Result.InvalidState"/> means the user's stats have not arrived yet (see <see cref="StatsReceived"/>), <see cref="Result.Fail"/> means the remote call failed</returns>
 		public static async Task<Result> RequestGlobalStatsAsync( int days )
 		{
 			var result = await SteamUserStats.Internal.RequestGlobalStats( days );
