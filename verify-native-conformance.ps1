@@ -58,9 +58,18 @@ foreach ($a in @($win64, $win32, $posix)) {
     if (-not (Test-Path $a)) { throw "Managed assembly not found: $a" }
 }
 
-# Every committed native binary, excluding build output.
+# Every committed native binary, excluding build output and any tooling directory.
+#
+# The dot-directory exclusion matters: .claude/worktrees/ can hold complete checkouts of
+# this same repo while other agent sessions are running, and each contributes its own copy
+# of all 17 binaries. Without this the script silently checks 34 or 51 files and reports a
+# pass count that looks wrong (and would keep passing even if the real tree regressed,
+# since the copies are checked too). Only the working tree should be verified.
 $natives = Get-ChildItem -Path $repo -Recurse -File -Include "steam_api.dll", "steam_api64.dll", "libsteam_api.so", "libsteam_api.dylib" |
-    Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' -and $_.FullName -notmatch '\\\.git\\' } |
+    Where-Object {
+        $_.FullName -notmatch '\\(bin|obj)\\' -and
+        $_.FullName -notmatch '\\\.[^\\]+\\'      # .git, .claude, .vs, ...
+    } |
     Sort-Object FullName
 
 if ($natives.Count -eq 0) { throw "No native Steamworks binaries found under $repo" }

@@ -127,10 +127,18 @@ namespace Steamworks
 
 		public static event Action<Connection, ConnectionInfo> OnConnectionStatusChanged;
 
-		private static void FakeIPResult( SteamNetworkingFakeIPResult_t data )
+		/// <summary>
+		/// k_nMaxSteamNetworkingFakeIPPorts - m_unPorts is always this long, and Steam zeroes
+		/// the entries it did not assign.
+		/// </summary>
+		private const int FakeIPPortCount = 8;
+
+		private static unsafe void FakeIPResult( SteamNetworkingFakeIPResult_t data )
 		{
-			foreach ( var port in data.Ports )
+			for ( var i = 0; i < FakeIPPortCount; i++ )
 			{
+				var port = data.Ports[i];
+
 				if ( port == 0 ) continue;
 
 				var address = NetAddress.From( Utility.Int32ToIp( data.IP ), port );
@@ -309,8 +317,16 @@ namespace Steamworks
 		/// Return info about the FakeIP and port that we have been assigned, if any.
 		/// 
 		/// </summary>
-		public static Result GetFakeIP( int fakePortIndex, out NetAddress address )
+		/// <exception cref="ArgumentOutOfRangeException">
+		/// <paramref name="fakePortIndex"/> is outside the <see cref="FakeIPPortCount"/> ports
+		/// Steam reports. m_unPorts is an inline fixed size buffer with no bounds check of its
+		/// own, so this has to be checked here rather than left to the indexer.
+		/// </exception>
+		public static unsafe Result GetFakeIP( int fakePortIndex, out NetAddress address )
 		{
+			if ( fakePortIndex < 0 || fakePortIndex >= FakeIPPortCount )
+				throw new ArgumentOutOfRangeException( nameof( fakePortIndex ), $"Steam reports {FakeIPPortCount} fake ports, so the index has to be 0 to {FakeIPPortCount - 1}" );
+
 			var pInfo = default( SteamNetworkingFakeIPResult_t );
 
 			Internal.GetFakeIP( 0, ref pInfo );

@@ -36,12 +36,12 @@ namespace Generator
                 // Main struct
                 //
                 WriteLine( $"[StructLayout( LayoutKind.Sequential, Pack = Platform.{(c.IsPack4OnWindows?"StructPackSize": "StructPlatformPackSize")} )]" );
-                StartBlock( $"{Cleanup.Expose( name )}{partial} struct {name}{iface}" );
+                StartBlock( $"{Cleanup.Expose( name )}{UnsafeModifier( c )}{partial} struct {name}{iface}" );
                 {
 					//
 					// The fields
 					//
-					StructFields( c.Fields );
+					StructFields( c.Name, c.Fields );
 					WriteLine();
 
 					if ( isCallback )

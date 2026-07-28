@@ -413,7 +413,7 @@ namespace Steamworks
 			{
 				if ( t.AuthTicket != ticket.Handle ) return;
 				result = t.Result;
-				ticket.Data = t.GubTicket;
+				ticket.Data = CopyWebApiTicket( ref t );
 			}
 
 			OnGetTicketForWebApiResponse += f;
@@ -445,6 +445,33 @@ namespace Steamworks
 			{
 				OnGetTicketForWebApiResponse -= f;
 			}
+		}
+
+		/// <summary>
+		/// k_nMaxAuthTicketForWebApiSize - the length of m_rgubTicket.
+		/// </summary>
+		private const int WebApiTicketMaxLength = 2560;
+
+		/// <summary>
+		/// Copies the ticket out into a buffer the caller owns.
+		///
+		/// <para>
+		/// m_rgubTicket is a fixed size buffer held inline in the callback struct now, so it
+		/// cannot simply be handed over by reference - and it would not survive the callback
+		/// if it could. The whole buffer is copied, exactly as before; <c>m_cbTicket</c> is
+		/// the used length, but <see cref="AuthTicket.Data"/> has always carried all of it.
+		/// </para>
+		/// </summary>
+		private static unsafe byte[] CopyWebApiTicket( ref GetTicketForWebApiResponse_t response )
+		{
+			var data = new byte[WebApiTicketMaxLength];
+
+			fixed ( byte* ticket = response.GubTicket )
+			{
+				Marshal.Copy( (IntPtr)ticket, data, 0, data.Length );
+			}
+
+			return data;
 		}
 
 		public static unsafe BeginAuthResult BeginAuthSession( byte[] ticketData, SteamId steamid )

@@ -417,12 +417,36 @@ namespace Steamworks
                 {
                     resultCount += result.Value.ResultsReturned;
 
-                    Array.ForEach(result.Value.GSteamID, id => { if (id > 0) steamIds.Add(id); });
+                    var page = result.Value;
+                    AddFollowedIds( ref page, steamIds );
                 }
             } while (result != null && resultCount < result.Value.TotalResultCount);
 
             return steamIds.ToArray();
         }
+
+		/// <summary>
+		/// k_cEnumerateFollowersMax - m_rgSteamID is always this long, and Steam zeroes the
+		/// entries it did not fill.
+		/// </summary>
+		private const int EnumerateFollowersMax = 50;
+
+		/// <summary>
+		/// Collects the non-zero ids out of one page of results. m_rgSteamID is a fixed size
+		/// buffer held inline in the struct, so it has to be pinned before it can be read -
+		/// and <paramref name="page"/> is taken by reference precisely so it can be.
+		/// </summary>
+		private static unsafe void AddFollowedIds( ref FriendsEnumerateFollowingList_t page, List<SteamId> steamIds )
+		{
+			fixed ( ulong* ids = page.GSteamID )
+			{
+				for ( var i = 0; i < EnumerateFollowersMax; i++ )
+				{
+					if ( ids[i] > 0 )
+						steamIds.Add( ids[i] );
+				}
+			}
+		}
 
 		/// <summary>
 		/// Call this before calling ActivateGameOverlayToWebPage() to have the Steam Overlay Browser block navigations

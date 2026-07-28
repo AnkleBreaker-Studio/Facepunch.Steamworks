@@ -201,7 +201,7 @@ namespace Steamworks
 		/// </param>
 		/// <exception cref="InvalidOperationException"><c>SteamServer.Init</c> has not run, or Steam reported a blob length outside its own documented maximum.</exception>
 		/// <exception cref="ArgumentException"><paramref name="appData"/> is longer than <see cref="GameCoordinatorServerLogin.MaxAppDataSize"/>.</exception>
-		public static GameCoordinatorServerLogin GetGameCoordinatorServerLogin( byte[] appData = null )
+		public static unsafe GameCoordinatorServerLogin GetGameCoordinatorServerLogin( byte[] appData = null )
 		{
 			if ( appData != null && appData.Length > GameCoordinatorServerLogin.MaxAppDataSize )
 				throw new ArgumentException( $"appData is {appData.Length} bytes - the maximum is {GameCoordinatorServerLogin.MaxAppDataSize}", nameof( appData ) );
@@ -210,16 +210,16 @@ namespace Steamworks
 
 			//
 			// Valve: "Populate the app data in pLoginInfo (m_cbAppData and m_appData). You can
-			// leave all other fields uninitialized." We still allocate the ByValArray fields,
-			// because the marshaller needs real arrays to copy into in both directions.
+			// leave all other fields uninitialized." m_appData is a fixed size buffer stored
+			// inline, so it needs no allocation - but m_routing.m_data is still a marshalled
+			// array, and the marshaller needs a real array to copy into in both directions.
 			//
 			var info = default( SteamDatagramGameCoordinatorServerLogin );
-			info.AppData = new byte[GameCoordinatorServerLogin.MaxAppDataSize];
 			info.Routing.Data = new byte[HostedServerAddressDataSize];
 			info.CbAppData = appData?.Length ?? 0;
 
 			if ( info.CbAppData > 0 )
-				Buffer.BlockCopy( appData, 0, info.AppData, 0, info.CbAppData );
+				Marshal.Copy( appData, 0, (IntPtr)info.AppData, info.CbAppData );
 
 			//
 			// pcbSignedBlob is in/out: in = capacity, out = bytes actually written. Valve

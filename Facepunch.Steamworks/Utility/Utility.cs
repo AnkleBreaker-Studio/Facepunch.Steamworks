@@ -182,5 +182,38 @@ namespace Steamworks
 				return Utf8NoBom.GetString( readBuffer, 0, i );
 			}
 		}
+
+		/// <summary>
+		/// Decodes a fixed size native UTF-8 buffer up to its null terminator.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The generated structs hold their native <c>char[N]</c> members as fixed size
+		/// buffers rather than <c>[MarshalAs(ByValArray)] byte[]</c>, because the array form
+		/// heap-allocates on every marshal. A fixed size buffer carries no length of its own,
+		/// so the terminator has to be found by hand.
+		/// </para>
+		/// <para>
+		/// <paramref name="bufferLength"/> is what stops that scan running off the end of the
+		/// struct. Steam is under no obligation to terminate a buffer it filled completely -
+		/// a 129 byte title holding 129 bytes of text is legal - and an unbounded scan would
+		/// then walk into whatever field follows. Truncating at the buffer length is the same
+		/// thing the native side does.
+		/// </para>
+		/// </remarks>
+		internal static unsafe string ReadNullTerminatedUTF8String( byte* buffer, int bufferLength )
+		{
+			if ( buffer == null || bufferLength <= 0 )
+				return string.Empty;
+
+			var length = 0;
+			while ( length < bufferLength && buffer[length] != 0 )
+				length++;
+
+			if ( length == 0 )
+				return string.Empty;
+
+			return Utf8NoBom.GetString( buffer, length );
+		}
 	}
 }

@@ -266,12 +266,37 @@ namespace Steamworks
 			if ( !r.HasValue || r.Value.Result != Result.OK )
 				return null;
 
+			var details = r.Value;
+
 			return new FileDetails
 			{
-				SizeInBytes = r.Value.FileSize,
-				Flags = r.Value.Flags,
-				Sha1 = string.Join( "", r.Value.FileSHA.Select( x => x.ToString( "x" ) ) )
+				SizeInBytes = details.FileSize,
+				Flags = details.Flags,
+				Sha1 = Sha1ToString( ref details )
 			};
+		}
+
+		/// <summary>
+		/// m_FileSHA is a raw SHA-1 digest, so always exactly this many bytes.
+		/// </summary>
+		private const int FileShaLength = 20;
+
+		/// <summary>
+		/// Formats the digest the same way it always was. m_FileSHA is a fixed size buffer
+		/// held inline in the struct, so it has to be pinned before it can be read - and
+		/// <paramref name="result"/> is taken by reference precisely so it can be.
+		/// </summary>
+		private static unsafe string Sha1ToString( ref FileDetailsResult_t result )
+		{
+			var str = new StringBuilder( FileShaLength * 2 );
+
+			fixed ( byte* sha = result.FileSHA )
+			{
+				for ( var i = 0; i < FileShaLength; i++ )
+					str.Append( sha[i].ToString( "x" ) );
+			}
+
+			return str.ToString();
 		}
 
 		/// <summary>
