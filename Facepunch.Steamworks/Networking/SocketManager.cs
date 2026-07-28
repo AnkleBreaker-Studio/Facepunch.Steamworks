@@ -172,7 +172,10 @@ namespace Steamworks
 			var msg = Marshal.PtrToStructure<NetMsg>( msgPtr );
 			try
 			{
-				OnMessage( msg.Connection, msg.Identity, msg.DataPtr, msg.DataSize, msg.RecvTime, msg.MessageNumber, msg.Channel );
+				// Argument order matters here: OnMessage takes ( ..., messageNum, recvTime, ... ).
+				// These two were previously passed the other way round, so every consumer
+				// received the microsecond timestamp as the message number and vice versa.
+				OnMessage( msg.Connection, msg.Identity, msg.DataPtr, msg.DataSize, msg.MessageNumber, msg.RecvTime, msg.Channel );
 			}
 			finally
 			{
