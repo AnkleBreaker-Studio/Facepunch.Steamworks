@@ -41,7 +41,9 @@ namespace Steamworks
 
         public IEnumerable<Friend> GetOfficers()
         {
-            for (int i = 0; i < SteamFriends.Internal.GetClanOfficerCount(Id); i++)
+            var count = SteamFriends.Internal.GetClanOfficerCount( Id );
+
+            for ( int i = 0; i < count; i++ )
             {
                 yield return new Friend(SteamFriends.Internal.GetClanOfficerByIndex(Id, i));
             }

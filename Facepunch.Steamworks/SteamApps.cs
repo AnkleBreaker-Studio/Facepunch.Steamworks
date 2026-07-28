@@ -121,7 +121,12 @@ namespace Steamworks
 			var appid = default( AppId );
 			var available = false;
 
-			for ( int i = 0; i < Internal.GetDLCCount(); i++ )
+			// Count hoisted out of the loop condition: it was re-queried through the native
+			// boundary on every iteration, doubling the interop transitions for no benefit.
+			// The DLC count is fixed for the lifetime of the app.
+			var count = Internal.GetDLCCount();
+
+			for ( int i = 0; i < count; i++ )
 			{
 				if ( !Internal.BGetDLCDataByIndex( i, ref appid, ref available, out var strVal ) )
 					continue;

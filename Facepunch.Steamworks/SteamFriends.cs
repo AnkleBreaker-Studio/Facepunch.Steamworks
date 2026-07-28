@@ -137,7 +137,12 @@ namespace Steamworks
 
 		private static IEnumerable<Friend> GetFriendsWithFlag(FriendFlags flag)
 		{
-			for ( int i=0; i<Internal.GetFriendCount( (int)flag); i++ )
+			// Hoisted out of the loop condition - it was one extra native call per friend.
+			// This backs six public enumerators, so it was the most-executed instance of the
+			// pattern in the library.
+			var count = Internal.GetFriendCount( (int)flag );
+
+			for ( int i = 0; i < count; i++ )
 			{
 				yield return new Friend( Internal.GetFriendByIndex( i, (int)flag ) );
 			}
@@ -187,7 +192,9 @@ namespace Steamworks
 
 		public static IEnumerable<Friend> GetPlayedWith()
 		{
-			for ( int i = 0; i < Internal.GetCoplayFriendCount(); i++ )
+			var count = Internal.GetCoplayFriendCount();
+
+			for ( int i = 0; i < count; i++ )
 			{
 				yield return new Friend( Internal.GetCoplayFriend( i ) );
 			}
@@ -195,7 +202,9 @@ namespace Steamworks
 
 		public static IEnumerable<Friend> GetFromSource( SteamId steamid )
 		{
-		    for ( int i = 0; i < Internal.GetFriendCountFromSource( steamid ); i++ )
+		    var count = Internal.GetFriendCountFromSource( steamid );
+
+		    for ( int i = 0; i < count; i++ )
 		    {
 		        yield return new Friend( Internal.GetFriendFromSourceByIndex( steamid, i ) );
 		    }
@@ -203,7 +212,9 @@ namespace Steamworks
 
 		public static IEnumerable<Clan> GetClans()
 		{
-			for (int i = 0; i < Internal.GetClanCount(); i++)
+			var count = Internal.GetClanCount();
+
+			for ( int i = 0; i < count; i++ )
 			{
 				yield return new Clan( Internal.GetClanByIndex( i ) );
 			}

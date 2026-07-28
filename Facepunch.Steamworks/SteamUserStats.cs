@@ -109,7 +109,11 @@ namespace Steamworks
 		{
 			get
 			{
-				for( int i=0; i< Internal.GetNumAchievements(); i++  )
+				// Hoisted: this was a native call per achievement per enumeration. The
+				// achievement count is fixed by the app's Steamworks configuration.
+				var count = Internal.GetNumAchievements();
+
+				for ( int i = 0; i < count; i++ )
 				{
 					yield return new Achievement( Internal.GetAchievementName( (uint) i ) );
 				}
