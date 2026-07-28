@@ -12,10 +12,15 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4.2.2
-    - name: Setup dotnet 6.0.x
+    # 6.0.x builds the library's net6.0 target framework.
+    # 8.0.x is needed by Tools/Steamworks.Conformance (the native export conformance
+    # checker), which targets net8.0.
+    - name: Setup dotnet
       uses: actions/setup-dotnet@v4.1.0
       with:
-          dotnet-version: '6.0.x'
+          dotnet-version: |
+            6.0.x
+            8.0.x
           include-prerelease: true
 
     - name: Restore Win32
@@ -38,6 +43,14 @@ jobs:
       run: dotnet build Facepunch.Steamworks\Facepunch.Steamworks.Posix.csproj --configuration Release
     - name: Build Win64 Release
       run: dotnet build Facepunch.Steamworks\Facepunch.Steamworks.Win64.csproj --configuration Release
+
+    # Asserts that every DllImport entry point in the built assemblies actually exists in
+    # every committed Steamworks binary (Windows, Linux and macOS). Entry points are plain
+    # strings the compiler never checks, so without this a symbol Valve removed - or a
+    # stale committed binary - ships silently and throws EntryPointNotFoundException on a
+    # player's machine. Needs no Steam client, account or network.
+    - name: Verify native export conformance
+      run: powershell -ExecutionPolicy Bypass -File verify-native-conformance.ps1
 
     - uses: actions/upload-artifact@v4.4.3
       with:
