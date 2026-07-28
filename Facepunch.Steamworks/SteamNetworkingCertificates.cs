@@ -435,18 +435,15 @@ namespace Steamworks
 		/// Reads Steam's <c>SteamNetworkingErrMsg</c> out of the interop struct.
 		/// </summary>
 		/// <remarks>
-		/// The native type is <c>char[1024]</c> — 1024 <i>bytes</i> of NUL-terminated UTF-8. The
-		/// generated <see cref="NetErrorMessage"/> declares <c>fixed char Value[1024]</c>, which in
-		/// C# is 2048 bytes of UTF-16. The buffer we hand to Steam is therefore twice the size it
-		/// expects, which is harmless (Steam writes at most 1024 bytes into it), but the contents
-		/// must be read as bytes, not as <see cref="char"/>s — reading it as UTF-16 yields mojibake.
-		/// Hence the pointer cast here.
+		/// The native type is <c>char[1024]</c> — 1024 <i>bytes</i> of NUL-terminated UTF-8, so
+		/// <see cref="NetErrorMessage"/> stores <c>byte</c>s. The scan is bounded at the buffer
+		/// length rather than trusting Steam to terminate.
 		/// </remarks>
 		private static unsafe string ReadErrorMessage( ref NetErrorMessage message )
 		{
 			fixed ( NetErrorMessage* ptr = &message )
 			{
-				var bytes = (byte*)ptr;
+				var bytes = ptr->Value;
 
 				var length = 0;
 				while ( length < MaxErrorMessageLength && bytes[length] != 0 )
