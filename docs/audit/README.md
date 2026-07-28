@@ -41,6 +41,46 @@ out to be a strength — those techniques are reproducible in CI, and they found
 
 ### Open, ranked by severity
 
+0. **Twenty generated structs have the wrong memory layout — one bad heuristic in the
+   generator.** This is the most severe open finding and it is a memory-corruption class
+   of bug, not a logic bug. Details in [01](01-marshaling-abi.md); the root cause and two
+   worked examples are reproduced below because they justify the ranking.
+
+   `Generator/SteamApiDefinition.cs:105-119` decides a struct's `[StructLayout(Pack=…)]`
+   with a guess: *"if any field **after the first** mentions `CSteamID`/`CGameID`, use
+   `Pack=4`, else `Pack=8`."* The intent is right — `steamclientpublic.h:475` wraps
+   `CSteamID` and `CGameID` in `#pragma pack(push,1)`, so they are 8 bytes with
+   **alignment 1**, while a C# `ulong` wants alignment 8. But `Pack` is a whole-struct
+   switch and cannot express "this 8-byte field aligns to 1, that one aligns to 8", so it
+   is wrong in both directions:
+
+   - `P2PSessionConnectFail_t` — its `CSteamID` is the *first* field, so `Skip(1)` misses
+     it, the struct gets `Pack=8`, and C# reports **16 bytes against a native 9**.
+     `Marshal.PtrToStructure` therefore reads **7 bytes past the end** of Steam's callback
+     buffer. This one is live.
+   - `RequestPlayersForGameResultCallback_t` — `Skip(1)` *does* fire, so it gets `Pack=4`,
+     giving **56 bytes against a native 64**, with 9 of its 10 fields at the wrong offset.
+
+   Valve documents the surrounding rule at `steamclientpublic.h:1163-1176`: callback
+   structs are `#pragma pack(8)` on Windows and `#pragma pack(4)` on Linux/macOS. Combined
+   with the `pack(1)` on `CSteamID`/`CGameID`, no single `Pack` value can be correct in
+   general — **the generator has to emit explicit `[FieldOffset]` layouts** computed from
+   those rules. That is the real fix, and it needs the layout-assertion test suite from
+   [05](05-tests-and-docs.md) landed first so the change is verifiable rather than
+   hopeful.
+
+   Related and same root cause: 9 structs are larger in C# than native (over-read), and
+   `UserStatsReceived_t` is 20 vs a native 24 — that number is passed as `cubCallback` to
+   `GetAPICallResult`, so if Steam validates the size, `RequestUserStats` returns `null`
+   forever with no exception.
+
+   Also from [01](01-marshaling-abi.md), independent of packing: `MatchMakingKeyValuePair`
+   (server-browser filters) marshals as ANSI, so `"café"` goes out as `63 61 66 E9`
+   instead of UTF-8 and `"日本語"` becomes three literal `?` — unrecoverable. Twenty
+   `const char*` callback fields are typed as raw `string`, including
+   `HTML_NeedsPaint_t.PBGRA`, which is a **BGRA framebuffer pointer** being scanned for a
+   NUL terminator.
+
 1. **`SteamApps` is registered on dedicated servers but has no game-server accessor** —
    `Self` stays `IntPtr.Zero` and `SteamServer.AddInterface<T>` ignores the failure return
    (unlike `SteamClient`'s). Any `SteamApps.*` call on a pure dedicated server passes a
