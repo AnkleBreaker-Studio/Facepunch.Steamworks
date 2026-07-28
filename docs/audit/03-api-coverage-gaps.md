@@ -352,10 +352,11 @@ The entire public surface is five members (`SteamInput.cs`: `RunFrame`, `Control
 | Xbox-origin bridging | `GetStringForXboxOrigin` (`:455`), `GetGlyphForXboxOrigin` (`:466`), `GetActionOriginFromXboxOrigin` (`:477`), `TranslateActionOrigin` (`:488`), `GetControllerForGamepadIndex` (`:433`), `GetGamepadIndexForController` (`:444`) | Migrating an existing XInput game incrementally. | **P2** |
 | Remote Play / config | `GetRemotePlaySessionID` (`:511`), `GetSessionInputConfigurationSettings` (`:522`), `GetDeviceBindingRevision` (`:500`) | Per-session input attribution. | **P2** |
 
-Also note the library currently uses the **legacy** glyph path: `GetGlyphForActionOrigin_Legacy` is
-reachable (`SteamInput.cs:62`), described by Valve at `isteaminput.h:847` as *"an older, Big Picture
-Mode-style PNG file"*. The modern `GetGlyphPNGForActionOrigin` / `GetGlyphSVGForActionOrigin` are also
-wrapped, so this is a default to revisit rather than a gap.
+Also note the library currently uses the **legacy** glyph path: `GetDigitalActionGlyph`
+(`SteamInput.cs:62`) returns `Internal.GetGlyphForActionOrigin_Legacy(origin)` at `SteamInput.cs:73`,
+described by Valve at `isteaminput.h:847` as *"an older, Big Picture Mode-style PNG file"*. The modern
+`GetGlyphPNGForActionOrigin` (`SteamInput.cs:88`) and `GetGlyphSVGForActionOrigin` are also wrapped,
+so this is a default to revisit rather than a gap.
 
 **DualSense adaptive triggers — `SetDualSenseTriggerEffect`.** Unbound (one of the 40).
 Declaration at `isteaminput.h:932-933`. The parameter is
@@ -673,7 +674,7 @@ Two places where the library **uses** something Valve marks legacy, worth revisi
 
 * `ISteamFriends::GetPlayerNickname` — reachable; `isteamfriends.h:250` says *"DEPRECATED:
   GetPersonaName follows the Steam nickname preferences…"*
-* `ISteamInput::GetGlyphForActionOrigin_Legacy` — used by `SteamInput.cs:62`; `isteaminput.h:847`
+* `ISteamInput::GetGlyphForActionOrigin_Legacy` — called at `SteamInput.cs:73`; `isteaminput.h:847`
   describes it as *"an older, Big Picture Mode-style PNG file"*. The modern PNG/SVG variants are also
   wrapped, so this is just a default to flip.
 

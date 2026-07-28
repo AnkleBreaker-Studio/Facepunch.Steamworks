@@ -127,9 +127,22 @@ namespace Steamworks
 		public static bool UsingBatteryPower => Internal.GetCurrentBatteryPower() != 255;
 
 		/// <summary>
-		/// Returns battery power [0-1].
+		/// The laptop battery's remaining charge, as a fraction from <c>0</c> (empty) to
+		/// <c>1</c> (full). Returns <c>1</c> when the machine is running on mains power.
 		/// </summary>
-		public static float CurrentBatteryPower => Math.Min( Internal.GetCurrentBatteryPower() / 100, 1.0f );
+		/// <remarks>
+		/// <para>
+		/// Steam reports this as a whole percentage, or the sentinel value <c>255</c> to
+		/// mean "on AC power". Both map onto this <c>0-1</c> range, with the AC sentinel
+		/// clamped to <c>1</c>. Use <see cref="UsingBatteryPower"/> to tell the two apart,
+		/// since a genuinely full battery and mains power both read as <c>1</c>.
+		/// </para>
+		/// <para>
+		/// Steam only refreshes this roughly once a minute, so do not expect it to track a
+		/// draining battery in real time.
+		/// </para>
+		/// </remarks>
+		public static float CurrentBatteryPower => Math.Min( Internal.GetCurrentBatteryPower() / 100.0f, 1.0f );
 
 		static NotificationPosition overlayNotificationPosition = NotificationPosition.BottomRight;
 

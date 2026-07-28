@@ -990,66 +990,66 @@ the handful of exemplary buffer contracts at `isteamutils.h:85`, `isteamuser.h:1
 
 ### P1 — the conformance harness (2-3 days)
 
-5. **Stand up `tests/Facepunch.Steamworks.Conformance/`** on xUnit/net8.0 with techniques
+6. **Stand up `tests/Facepunch.Steamworks.Conformance/`** on xUnit/net8.0 with techniques
    1, 2, 3 and 6 — all four prototyped and working during this audit. Commit
    `struct-sizes.txt` (337 entries) and `native-exports.txt` (1,089 entries) as golden
    baselines. **Gate CI on it.** This converts "no test can run without Steam" into a real
    build gate that already catches 6 live bugs.
-6. **Add the callback-collision allow-list test.** Assert every `CallbackType` value maps to
+7. **Add the callback-collision allow-list test.** Assert every `CallbackType` value maps to
    exactly one struct except an explicit, commented allow-list containing 1108. Harmonise the
    generator's inconsistent handling of 1108 vs 1112 while you are there.
-7. **Assert the three TFMs expose an identical public surface** — `net46` is currently one XML
+8. **Assert the three TFMs expose an identical public surface** — `net46` is currently one XML
    doc entry short of the other two, meaning conditional compilation is silently changing the
    API.
 
 ### P2 — documentation, in this order (the ordering is the recommendation)
 
-8. **`Result` enum — 130 members.** Highest value in the library: it is the return type of
+9. **`Result` enum — 130 members.** Highest value in the library: it is the return type of
    nearly every async operation and users see it constantly. Largely self-describing from
    Valve's `EResult`, so low difficulty.
-9. **The UGC cluster as one project — `Ugc.Query` (69) + `Ugc.Item` (24) + `Ugc.Editor` (17)
+10. **The UGC cluster as one project — `Ugc.Query` (69) + `Ugc.Item` (24) + `Ugc.Editor` (17)
    + `UgcType` (14) = 124 undocumented members.** Do it *together with* the pure-managed unit
    tests (technique 5), because both require understanding the same contracts and `Ugc.Query`
    is a pure builder. Note that `isteamugc.h` is 45.7% bare and self-contradictory on
    deprecation, so budget time for stating assumptions.
-10. **The networking cluster — 92 members.** `NetConnectionEnd` first: it is what developers
+11. **The networking cluster — 92 members.** `NetConnectionEnd` first: it is what developers
     read when a connection drops, and it is the one area where Valve's headers are excellent,
     so it can be documented with citations rather than assumptions.
-11. **Add `<param>` and `<returns>` to the facade layer.** At 11.8% and 6.6% these are five
+12. **Add `<param>` and `<returns>` to the facade layer.** At 11.8% and 6.6% these are five
     times worse than summary coverage, and for a P/Invoke binding the arguments are where the
     danger is. Prioritise the 373 members that take parameters.
-12. **Write the first `<example>` blocks.** There are currently **zero** in the library.
+13. **Write the first `<example>` blocks.** There are currently **zero** in the library.
     Target the top ~15 entry-point flows (init/shutdown, lobby create-join, UGC publish, auth
     ticket, inventory grant). This is the highest-leverage thing available for a library whose
     stated purpose is ease of use.
-13. **Fix `SteamUtils.CurrentBatteryPower` (`SteamUtils.cs:132`) — a live bug, not a doc
-    issue.** Integer division (`byte / 100`) makes the property return `0` for every battery
-    level from 0% to 99% and `1` only at 100% or on AC power. Change `/ 100` to `/ 100.0f`
-    and add the three-line unit test that would have caught it. Also fix the identical
-    copy-pasted summary on `SteamMatchmaking.OnLobbyMemberLeave` / `OnLobbyMemberDisconnected`,
-    which makes two distinct events indistinguishable.
-14. **Document the partner-site prerequisites** for `SteamInventory`, `SteamRemotePlay`,
+14. **Sweep the summaries that are wrong rather than merely thin.** The clearest case is the
+    identical copy-pasted summary on `SteamMatchmaking.OnLobbyMemberLeave` and
+    `OnLobbyMemberDisconnected` — two distinct events a reader cannot tell apart. Once
+    recommendation 5 lands, also rewrite `SteamUtils.CurrentBatteryPower`'s summary to state
+    the AC-power (`255` native) case, which the current `[0-1]` phrasing hides. Audit the
+    27 heuristically-flagged tautological summaries in the same pass.
+15. **Document the partner-site prerequisites** for `SteamInventory`, `SteamRemotePlay`,
     `SteamInput`, `SteamTimeline` icons and `SteamUtils.CheckFileSignature`. Valve mentions
     this in only 10 lines SDK-wide and names almost no pages; ours would be the only place a
     developer can learn why the API silently returns nothing.
-15. **Explicitly deprioritise `CallbackType` (217 members).** It is the largest number on the
+16. **Explicitly deprioritise `CallbackType` (217 members).** It is the largest number on the
     ranking and the lowest user value — an internal dispatch mechanism consumers never touch.
     Document the *type* well (including the 1108/1112 collisions), skip the members, and make
     sure nobody games the coverage metric with it.
 
 ### P3 — the test rewrite (1-2 weeks)
 
-16. **Split the suite three ways** (`Conformance` / `Unit` / `Live`) per the layout above.
+17. **Split the suite three ways** (`Conformance` / `Unit` / `Live`) per the layout above.
     Migrate to xUnit. Move the 118 existing tests into `Live` largely as-is.
-17. **Fix the blocking defects in the live suite** before trusting a green run: the
+18. **Fix the blocking defects in the live suite** before trusting a green run: the
     `1442910` vs `252490` app ID mismatch, the missing `game_actions_252490.vdf`, the
     `TestWin32` x64 mis-targeting, the shared output directory, and the un-timeboxed
     `while (true)` in `GameServerTest.PublicIp`.
-18. **Add `[AssemblyCleanup]`/`IDisposable` teardown** and stop leaking: 100 MB cloud files,
+19. **Add `[AssemblyCleanup]`/`IDisposable` teardown** and stop leaking: 100 MB cloud files,
     32 MB workshop uploads, three public lobbies per run, and a permanently-open microphone.
-19. **Give the 53 assertion-free tests real assertions, or delete them.** 44.9% of the suite
+20. **Give the 53 assertion-free tests real assertions, or delete them.** 44.9% of the suite
     currently cannot fail. `UtilsTest` (13/14) and `FriendsTest` (8/8) are the worst.
-20. **Adopt a documentation-coverage ratchet** in `ApiInvariantTests` using the per-namespace
+21. **Adopt a documentation-coverage ratchet** in `ApiInvariantTests` using the per-namespace
     floors measured here (`Steamworks` 33.6%, `Steamworks.Data` 50.2%, `Steamworks.Ugc` 28.7%,
     `Steamworks.ServerList` 16.7%). Fail the build if coverage regresses; raise the floor as
     P2 lands.
