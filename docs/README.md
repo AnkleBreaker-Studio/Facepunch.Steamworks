@@ -1,4 +1,4 @@
-# Documentation
+﻿# Documentation
 
 Steam's own documentation is thin and, in several places, wrong or unfollowable. These
 docs aim to be the opposite: explain the concept, show a worked example, and be explicit
@@ -51,8 +51,19 @@ what has already been fixed.
 
 ## Verifying the library without Steam
 
-Steam does not need to be installed to check a great deal of this library's correctness,
-and both of these run in CI:
+Steam does not need to be installed to check a great deal of this library's correctness.
+**Run this locally before every commit** — it is the primary gate, and it runs all of the
+checks below:
+
+```bash
+powershell -ExecutionPolicy Bypass -File verify.ps1
+```
+
+CI runs the same scripts, but treat CI as a backstop rather than the source of truth: if
+`verify.ps1` passes on your machine the change is good, and if it fails, CI will not save
+you.
+
+The individual gates, if you want to run one on its own:
 
 ```bash
 powershell -ExecutionPolicy Bypass -File verify-native-conformance.ps1
