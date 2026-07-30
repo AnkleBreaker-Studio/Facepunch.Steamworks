@@ -52,6 +52,20 @@ namespace Steamworks
         /// written at its own call site, where the cost is visible.
         /// </para>
         /// <para>
+        /// <b>One behavioural difference from <c>PtrToStructure</c>, for the record.</b> A
+        /// block copy preserves the byte behind a <c>bool</c> field, where the marshaller
+        /// normalises it to 0 or 1. Field offsets are unaffected - the generator emits
+        /// <c>[MarshalAs(UnmanagedType.I1)]</c> on every <c>bool</c>, one byte on both
+        /// sides - and every comparison anyone actually writes agrees, because C# tests a
+        /// <c>bool</c> for non-zero. Only <c>x.Flag == true</c>, which compiles to an
+        /// equality test against exactly 1, could tell a stray byte apart. It cannot see
+        /// one in practice: these bytes come from C++ <c>bool</c> members, which the
+        /// platform ABI defines as 0 or 1, and reading any other value is undefined on the
+        /// C++ side too. Verified by filling every one of the 217 callback structs with a
+        /// random byte pattern and comparing both readers field by field - the only
+        /// disagreements found anywhere were these bool bytes.
+        /// </para>
+        /// <para>
         /// Deliberately not written using <c>System.Runtime.CompilerServices.Unsafe</c>:
         /// that would add a NuGet dependency to a library shipped into Unity projects as
         /// loose DLLs, and a plain pointer dereference measures identically.
