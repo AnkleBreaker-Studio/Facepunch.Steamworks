@@ -323,9 +323,13 @@ Why those numbers were what they were:
 
 - **`Marshal.PtrToStructure<T>` does not avoid boxing.** This overturned a fix made earlier
   in the same session. Both the generic and the `Type` overload allocate exactly
-  `Unsafe.SizeOf<T>() + 16` bytes on CoreCLR — the generic one boxes internally — and the
-  generic form is *slower* for small structs. 222 of the 440 value types in the assembly are
-  blittable and can use `Unsafe.Read<T>` instead: measured 93x faster and zero allocation.
+  `sizeof(T) + 16` bytes on CoreCLR — the generic one creates an `object`, marshals into it
+  and unboxes on return — so swapping between them changes nothing, and the generic form is
+  *slower* for small structs. Callback delivery now uses a plain pointer dereference behind
+  an `unmanaged` constraint, which the compiler checks rather than trusts: it refuses any
+  type carrying a managed reference, which is exactly the set that genuinely needs
+  marshalling. Zero allocation per delivered callback, for the 222 of 440 value types that
+  qualify.
 
 Also verified and genuinely fine, so nobody re-litigates it: the dispatch pump's own
 bookkeeping allocates **0 bytes** per frame; string marshalling is **at the theoretical

@@ -139,20 +139,37 @@ using ( var result = page.Value )
 
 ### Three things that will catch you
 
-**Pages are 1-based.** `GetPageAsync( 0 )` throws.
+**Pages are 1-based and a fixed 50 items.** `GetPageAsync( 0 )` throws, and the page size is
+Valve's `kNumUGCResultsPerPage = 50` — you cannot change it. Paginate; do not try to ask for
+200 items at once.
 
 **`Entries` is a lazy iterator over a live native handle.** It re-queries on every
 enumeration, and returns nothing once the page is disposed. Enumerate inside the `using`, or
 materialise with `.ToList()` before leaving it. A `ResultPage` captured and read later yields
 an empty sequence — not an exception, which makes it hard to spot.
 
-**`Query` is a struct.** Every builder method returns a modified copy:
+**`Query` is a struct, but its tag lists are not.** Every builder method returns a modified
+copy, so an unassigned call is lost:
 
 ```csharp
 var q = Steamworks.Ugc.Query.Items;
 q.WithTag( "Weapons" );          // WRONG — the copy is discarded
 q = q.WithTag( "Weapons" );      // right
 ```
+
+That much is the ordinary struct rule. The subtler half is that the tag lists inside are
+reference types **shared by every copy**, so branching one stored query contaminates all the
+branches:
+
+```csharp
+var q = Steamworks.Ugc.Query.Items.WithTag( "Fantasy" );
+var swords = q.WithTag( "Sword" );
+var bows   = q.WithTag( "Bow" );
+// swords, bows AND q now all require Fantasy + Sword + Bow.
+```
+
+**Build each query from a fresh factory call.** Do not branch or reuse one. This is verified
+against the implementation, not documented by Valve.
 
 ### What comes back, and what does not
 
@@ -222,13 +239,16 @@ Console.WriteLine( item?.IsSubscribed );
 `Item.GetAsync` takes a `maxageseconds` parameter that is **declared and never used** — the
 implementation does not apply it. Do not rely on it to control caching.
 
-### Two limitations of the query API
+### One limitation of the query API
 
-- **You cannot query another app's Workshop.** The consumer and creator AppIDs are private
-  fields defaulted to `SteamClient.AppId`, with no public setter and no `ForAppId` on
-  `Query`. (`Editor` does have `ForAppId`.)
-- **`Query.InLanguage( … )` does nothing.** It stores the value and nothing ever reads it.
-  `Editor.InLanguage` is wired up correctly; the query one is not.
+**You cannot query another app's Workshop.** The consumer and creator AppIDs are private
+fields defaulted to `SteamClient.AppId`, with no public setter and no `ForAppId` on `Query`.
+(`Editor` does have `ForAppId`.)
+
+`InLanguage( "german" )` asks Steam to return titles and descriptions in a specific language
+where the creator supplied a translation, falling back to the language the item was written
+in. It was a no-op until recently — the value was stored and never read — so if you tried it
+before and concluded it did not work, try again.
 
 ---
 
@@ -273,8 +293,9 @@ downloaded and bytes total. It is not `IProgress<T>`.
 > **It has no timeout.** The XML doc claims *"If CancellationToken is default then there is
 > 60 seconds timeout"*. There is no such timeout in the code — the `60` in the signature is
 > `milisecondsUpdateDelay`, the polling interval (and yes, that parameter name is misspelled
-> in the public API). **Always pass a `CancellationToken`**, or a stalled download hangs the
-> await forever.
+> in the public API). A download that *fails* now exits the loop and returns `false`; a
+> download that simply never progresses — no result callback ever arrives — still spins
+> forever. **Always pass a `CancellationToken`.** It is the only exit for that case.
 >
 > **A `true` return does not mean it downloaded.** On the early-out path it returns
 > `item.IsInstalled` — which is `true` if the item was already installed before you asked.
