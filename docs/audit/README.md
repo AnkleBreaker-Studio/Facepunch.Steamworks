@@ -73,10 +73,49 @@ out to be a strength — those techniques are reproducible in CI, and they found
    Valve documents the surrounding rule at `steamclientpublic.h:1163-1176`: callback
    structs are `#pragma pack(8)` on Windows and `#pragma pack(4)` on Linux/macOS. Combined
    with the `pack(1)` on `CSteamID`/`CGameID`, no single `Pack` value can be correct in
-   general — **the generator has to emit explicit `[FieldOffset]` layouts** computed from
-   those rules. That is the real fix, and it needs the layout-assertion test suite from
-   [05](05-tests-and-docs.md) landed first so the change is verifiable rather than
-   hopeful.
+   general.
+
+   **An attempted fix was reverted — read this before trying the same thing.** The obvious
+   move is: model the pragma by putting `Pack = 1` on the C# `SteamId`/`GameId` structs, then
+   drop the heuristic and use the platform pack (8 Windows / 4 POSIX) everywhere. That
+   reasoning is sound and was verified in isolation — with an align-1 id struct,
+   `RequestPlayersForGameResultCallback_t` measures 64 on Windows and 56 on POSIX, and
+   `P2PSessionConnectFail_t` measures 9, all matching the headers exactly.
+
+   It does not work, for a reason that is easy to miss: **the generated structs do not use
+   `SteamId`.** They emit a raw `ulong`:
+
+   ```csharp
+   internal struct FriendsGetFollowerCount_t : ICallbackData
+   {
+       internal Result Result;   // m_eResult EResult
+       internal ulong SteamID;   // m_steamID CSteamID     <-- ulong, not SteamId
+       internal int Count;       // m_nCount int
+   }
+   ```
+
+   So `Pack = 1` on `SteamId` has no effect on them, and flipping their pack from 4 to 8
+   simply lets the `ulong` align to 8. Measured consequence: `FriendsGetFollowerCount_t`
+   went from 16 bytes to 24, and **16 was already correct** — native is `int@0`,
+   `CSteamID@4` (align 1), `int@12`, struct align 4, size 16.
+
+   That exposes something the original audit did not state: **the `Pack = 4` hack is
+   accidentally right much of the time.** When a 4-byte field precedes the `CSteamID`, the
+   native offset is 4 and a pack-4 `ulong` also lands at 4, so the layouts coincide. The 20
+   broken structs are exactly the ones where that coincidence fails. A wholesale pack flip
+   therefore trades 20 wrong structs for a different, larger set of wrong structs — the
+   layout baseline caught this immediately, showing 20 size changes of which several were
+   regressions.
+
+   **The actual fix** is to change the generated field *type*, not the pack: emit an
+   alignment-1 wrapper for `CSteamID`/`CGameID` fields (a `[StructLayout(Pack = 1)]` struct
+   wrapping a `ulong`, implicitly convertible both ways so consumers are unaffected), and
+   only then switch to the uniform platform pack. At that point the C# types model the
+   native ABI faithfully and no heuristic is needed. This touches every generated struct
+   with an id field plus their consumers, so it wants its own pass — but the layout baseline
+   now makes the outcome checkable, and the expected end state is precise: the 20 structs
+   listed in [01](01-marshaling-abi.md) move to their header-derived sizes and nothing else
+   moves at all.
 
    Related and same root cause: 9 structs are larger in C# than native (over-read), and
    `UserStatsReceived_t` is 20 vs a native 24 — that number is passed as `cubCallback` to
