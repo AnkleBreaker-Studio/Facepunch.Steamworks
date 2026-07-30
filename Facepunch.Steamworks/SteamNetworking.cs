@@ -497,12 +497,15 @@ namespace Steamworks
 		/// overstated length reads past the end of your memory.
 		/// </param>
 		/// <param name="nChannel">
-		/// The routing channel the receiver must read from.
+		/// The routing channel the receiver must read from. The receiver has to poll this same
+		/// channel — <see cref="ReadP2PPacket(int)"/> and <see cref="IsP2PPacketAvailable(int)"/>
+		/// both take one — or the message is queued and never seen.
 		/// <para>
-		/// <b>Careful: this parameter defaults to 1, not 0.</b> Every other channel parameter in this class —
-		/// including the other <c>SendP2PPacket</c> overload and all three <c>ReadP2PPacket</c> overloads —
-		/// defaults to 0. Omitting it here therefore sends on a channel that a default-argument receive loop
-		/// never polls, and the message is silently never seen. Always pass this explicitly.
+		/// This defaulted to <c>1</c> until recently, while the managed-array overload and every
+		/// receive path defaulted to <c>0</c>. Omitting it therefore sent on a channel a
+		/// default-argument receive loop never polls, and the packet silently vanished. It now
+		/// defaults to <c>0</c> like everything else. If you were compensating by passing
+		/// <c>1</c> explicitly on the send side only, remove that.
 		/// </para>
 		/// </param>
 		/// <param name="sendType">
@@ -515,7 +518,7 @@ namespace Steamworks
 		/// <see langword="true"/> means queued for sending, not delivered. Failures surface later via
 		/// <see cref="OnP2PConnectionFailed"/>.
 		/// </returns>
-		public static unsafe bool SendP2PPacket( SteamId steamid, byte* data, uint length, int nChannel = 1, P2PSend sendType = P2PSend.Reliable )
+		public static unsafe bool SendP2PPacket( SteamId steamid, byte* data, uint length, int nChannel = 0, P2PSend sendType = P2PSend.Reliable )
 		{ 
 			return Internal.SendP2PPacket( steamid, (IntPtr)data, (uint)length, (P2PSend)sendType, nChannel );
 		}

@@ -568,11 +568,23 @@ namespace Steamworks
 		/// <see cref="SetStat(string, float)"/>.
 		/// </returns>
 		/// <remarks>
+		/// <para>
 		/// Local until <see cref="StoreStats"/>. Carries the same read-modify-write hazard as
 		/// <see cref="AddStat(string, int)"/> when called before <see cref="StatsReceived"/> is
 		/// <see langword="true"/>.
+		/// </para>
+		/// <para>
+		/// <paramref name="amount"/> has no default, deliberately. It used to default to
+		/// <c>1.0f</c> while <see cref="AddStat(string, int)"/> defaulted to <c>1</c>, which made
+		/// the one-argument call <c>AddStat( "name" )</c> ambiguous between the two overloads and
+		/// a compile error (CS0121) — so both defaults were unreachable. Dropping this one lets
+		/// the one-argument form compile and resolve to the integer overload, which is what
+		/// "increment by one" means for the counter stats it is normally used on. Removing it
+		/// could not break existing callers, because no call that relied on it could ever have
+		/// compiled. Pass the amount explicitly for float stats.
+		/// </para>
 		/// </remarks>
-		public static bool AddStat( string name, float amount = 1.0f )
+		public static bool AddStat( string name, float amount )
 		{
 			var val = GetStatFloat( name );
 			val += amount;
