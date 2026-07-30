@@ -436,14 +436,29 @@ namespace Steamworks
 		/// buffer held inline in the struct, so it has to be pinned before it can be read -
 		/// and <paramref name="page"/> is taken by reference precisely so it can be.
 		/// </summary>
+		/// <remarks>
+		/// The native member is <c>CSteamID[50]</c>. <c>CSteamID</c> is declared inside
+		/// <c>#pragma pack( push, 1 )</c> (<c>steamclientpublic.h:475</c>), so the array is
+		/// byte-aligned: entry <c>i</c> starts at byte <c>i * 8</c> from a base that itself need
+		/// not be 8-byte aligned. That is why the buffer is held as raw bytes rather than as
+		/// <c>ulong</c>, whose alignment would have pushed the whole array off its native
+		/// offset. Each id is reassembled a byte at a time so no alignment is assumed;
+		/// little-endian, matching every platform this binding ships for.
+		/// </remarks>
 		private static unsafe void AddFollowedIds( ref FriendsEnumerateFollowingList_t page, List<SteamId> steamIds )
 		{
-			fixed ( ulong* ids = page.GSteamID )
+			fixed ( byte* ids = page.GSteamID )
 			{
 				for ( var i = 0; i < EnumerateFollowersMax; i++ )
 				{
-					if ( ids[i] > 0 )
-						steamIds.Add( ids[i] );
+					var entry = ids + i * sizeof( ulong );
+
+					ulong id = 0;
+					for ( var b = sizeof( ulong ) - 1; b >= 0; b-- )
+						id = (id << 8) | entry[b];
+
+					if ( id > 0 )
+						steamIds.Add( id );
 				}
 			}
 		}

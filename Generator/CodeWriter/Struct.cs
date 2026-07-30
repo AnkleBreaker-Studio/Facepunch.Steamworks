@@ -36,6 +36,7 @@ namespace Generator
         //
         private readonly static Dictionary<string, string> FixedBufferElements = new Dictionary<string, string>
         {
+            { "byte", "byte" },
             { "char", "byte" },
             { "uint8", "byte" },
             { "ushort", "ushort" },
@@ -43,7 +44,6 @@ namespace Generator
             { "uint32", "uint" },
             { "AppId", "uint" },
             { "float", "float" },
-            { "SteamId", "ulong" },
             { "PublishedFileId", "ulong" },
         };
 
@@ -93,7 +93,7 @@ namespace Generator
                 //
                 // Main struct
                 //
-                WriteLine( $"[StructLayout( LayoutKind.Sequential, Pack = Platform.{(c.IsPack4OnWindows?"StructPackSize": "StructPlatformPackSize")} )]" );
+                WriteLine( $"[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]" );
                 StartBlock( $"{Cleanup.Expose( name )}{UnsafeModifier( c )}{partial} struct {name}" );
                 {
 					//
@@ -128,11 +128,56 @@ namespace Generator
             return c.Fields.Any( m => IsFixedBuffer( c.Name, m, out _, out _ ) ) ? " unsafe" : "";
         }
 
+        //
+        // Valve's two id classes are declared inside "#pragma pack( push, 1 )"
+        // (steamclientpublic.h:475, CSteamID at :480 and CGameID at :922, popped at :1108),
+        // so both are 8 bytes with ALIGNMENT 1. A C# ulong wants alignment 8, which is what
+        // shifted 16 generated structs. They are emitted as PackedId - a Pack = 1 wrapper
+        // over a ulong - so the managed field has the native alignment and the enclosing struct
+        // can carry the header's own pack value with no heuristic. See
+        // Facepunch.Steamworks/Structs/PackedId.cs.
+        //
+        private const string NativeIdType = "PackedId";
+
+        /// <summary>
+        /// True when this member is a native <c>CSteamID</c>/<c>CGameID</c>.
+        /// <paramref name="arrayLength"/> is the element count for an array member, 0 for a
+        /// scalar one.
+        /// </summary>
+        private static bool IsNativeIdMember( string nativeType, out int arrayLength )
+        {
+            arrayLength = 0;
+
+            var t = nativeType.Replace( "class ", "" ).Replace( "struct ", "" ).Trim();
+
+            var bracket = t.IndexOf( '[' );
+            if ( bracket >= 0 )
+            {
+                if ( !int.TryParse( t.Substring( bracket ).Trim( '[', ']', ' ' ), out arrayLength ) )
+                    return false;
+
+                t = t.Substring( 0, bracket ).Trim();
+            }
+
+            return t == "CSteamID" || t == "CGameID";
+        }
+
         /// <summary>
         /// The managed type a member ends up as, before any array handling.
         /// </summary>
         private string FieldType( SteamApiDefinition.StructDef.StructFields m )
         {
+            if ( IsNativeIdMember( m.Type, out var idCount ) )
+            {
+                //
+                // A fixed size buffer takes its alignment from its element type and C# only
+                // allows primitives there, so an array of ids cannot be `fixed PackedId[N]`.
+                // `fixed byte[N * 8]` occupies the same bytes and, crucially, has the same
+                // alignment as the native array: 1.
+                //
+                return idCount > 0 ? $"byte [{idCount * 8}]" : NativeIdType;
+            }
+
             var t = Cleanup.ConvertType( ToManagedType( m.Type ) );
 
             if ( TypeDefs.ContainsKey( t ) )

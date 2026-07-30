@@ -31,6 +31,7 @@ out to be a strength — those techniques are reproducible in CI, and they found
 
 | Defect | Severity | Report |
 |---|---|---|
+| **16 generated structs had the wrong memory layout** — one bad heuristic in the generator. `Marshal.PtrToStructure` read up to 7 bytes past Steam's callback buffer, or read every field after the first from the wrong offset. See the note below the table | **Critical** | 01 |
 | Solution did not build on a clean machine (`net46` refs + three projects sharing one `obj/`) | Blocker | — |
 | `ISteamAppList` — 6 bindings to functions Valve deleted; threw `EntryPointNotFoundException` | High | 00 |
 | 8 committed native binaries ~11 SDK releases stale, incl. **every Linux and macOS library** — missing `SteamInternal_GameServer_Init_V2`, so a Linux dedicated server could not initialise | **Critical** | 00 |
@@ -48,110 +49,117 @@ out to be a strength — those techniques are reproducible in CI, and they found
 | Steam Deck floating keyboard and both text-input dismiss calls were bound but unreachable (one was commented out with the wrong return type) | Medium | 03 |
 | Complete SDR surface unexposed — poll groups, hosted dedicated servers, ping locations, POPs, certificates | High | 03 |
 
+#### The generator's `Pack` heuristic — the diagnosis, the failed attempt, and what worked
+
+This was the top open finding for two passes and is worth recording in full, because the
+obvious fix is wrong in a way that is easy to miss.
+
+**The defect.** `Generator/SteamApiDefinition.cs` decided a struct's
+`[StructLayout(Pack=…)]` with a guess: *"if any field **after the first** mentions
+`CSteamID`/`CGameID`, use `Pack=4`, else `Pack=8`."* The intent was right —
+`steamclientpublic.h:475` opens `#pragma pack( push, 1 )`, `class CSteamID` follows at
+:480 and `class CGameID` at :922, and the block is not popped until :1108, so both are 8
+bytes with **alignment 1**, while a C# `ulong` wants alignment 8. But `Pack` is a
+whole-struct switch and cannot express "this 8-byte field aligns to 1, that one aligns to
+8", so it was wrong in both directions:
+
+- `P2PSessionConnectFail_t` — its `CSteamID` is the *first* field, so `Skip(1)` missed it,
+  the struct got `Pack=8`, and C# reported **16 bytes against a native 9**.
+  `Marshal.PtrToStructure` therefore read **7 bytes past the end** of Steam's callback
+  buffer. This one was live (`SteamNetworking.cs:31`).
+- `RequestPlayersForGameResultCallback_t` — `Skip(1)` *did* fire, so it got `Pack=4`,
+  giving **56 bytes against a native 64**, with 9 of its 10 fields at the wrong offset.
+
+Valve documents the surrounding rule at `steamclientpublic.h:1161-1178`: callback structs
+are `#pragma pack(8)` on Windows and `#pragma pack(4)` on Linux/macOS. Combined with the
+`pack(1)` on `CSteamID`/`CGameID`, no single `Pack` value can be correct in general.
+
+**The attempt that was reverted, and why it failed.** The obvious move is: model the
+pragma by putting `Pack = 1` on the C# `SteamId`/`GameId` structs, then drop the heuristic
+and use the platform pack everywhere. That reasoning is sound and was verified in
+isolation. It does not work in this codebase, because **the generated structs did not use
+`SteamId`** — they emitted a raw `ulong` for every `CSteamID` field, so `Pack = 1` on
+`SteamId` never applied to them and flipping their pack from 4 to 8 merely let the `ulong`
+align to 8. Measured consequence: `FriendsGetFollowerCount_t` went from 16 bytes to 24,
+and **16 was already correct** — native is `int@0`, `CSteamID@4` (align 1), `int@12`,
+struct align 4, size 16.
+
+That exposed something the original audit did not state: **the `Pack = 4` hack was
+accidentally right much of the time.** Whenever a 4-byte field precedes the `CSteamID`, the
+native offset is 4 and a pack-4 `ulong` also lands at 4, so the layouts coincide. The
+broken structs were exactly the ones where that coincidence failed — which is why a
+wholesale pack flip traded one wrong set for a larger one.
+
+**What worked: change the field's *type*, not the struct's pack.**
+
+1. `Facepunch.Steamworks/Structs/PackedId.cs` — a new `internal`
+   `[StructLayout(LayoutKind.Sequential, Pack = 1)] struct PackedId { ulong Value; }`, with
+   implicit conversions to and from `ulong`, `SteamId` and `GameId`. `Pack = 1` is
+   load-bearing and documented as such in the file. It is deliberately *not* `SteamId`:
+   `SteamId` is public and is a by-value P/Invoke argument in over a hundred places, so it
+   was left untouched.
+2. `Generator/CodeWriter/Struct.cs` emits `PackedId` for every `CSteamID`/`CGameID` struct
+   member. The one native id *array* in the SDK
+   (`FriendsEnumerateFollowingList_t.m_rgSteamID`, `CSteamID[50]`) becomes
+   `fixed byte[400]` — a C# `fixed` buffer takes its alignment from its element type and
+   only accepts primitives, so `fixed ulong[50]` would have forced alignment 8 where native
+   has 1. `byte` gives the same 400 bytes at the same alignment.
+3. Only then was `IsPack4OnWindows` deleted and `Platform.StructPlatformPackSize` used
+   uniformly. No heuristic remains; the C# types now model the native ABI directly.
+
+**Verified.** 16 structs moved to their header-derived layouts, on both Windows (pack 8)
+and POSIX (pack 4). A further 17 changed only their recorded `Pack` attribute, with size
+and every field offset byte-identical — those are precisely the "accidentally right" set.
+Nothing else in the assembly moved, and no public type changed. The independent check is a
+header-derived MSVC-x64 layout model diffed against `Marshal.SizeOf`/`OffsetOf`: **19
+mismatches → 0** on Windows and **4 → 0** on POSIX, the only remaining entries being four
+hand-written structs that deliberately expose fewer fields than the C++ definition while
+pinning the same total size. `FriendsGetFollowerCount_t` — the canary from the failed
+attempt — stays at **16**.
+
+The `20` figure used in earlier revisions of this file was a miscount, taken from the
+number of size *changes* the reverted pack-flip produced rather than from the defect
+tables. The verifiable number from [01](01-marshaling-abi.md)'s own tables is **17**:
+5 offset defects (F1) + 9 over-reads (F2) + 2 under-reads (F3) + `SteamInputActionEvent_t`
+(F6). 16 of those are fixed here. `SteamInputActionEvent_t` is not, and cannot be by
+packing alone — the generator drops its `union` entirely, so its size is wrong for an
+unrelated reason. It remains open as F6.
+
 ### Open, ranked by severity
 
-0. **Twenty generated structs have the wrong memory layout — one bad heuristic in the
-   generator.** This is the most severe open finding and it is a memory-corruption class
-   of bug, not a logic bug. Details in [01](01-marshaling-abi.md); the root cause and two
-   worked examples are reproduced below because they justify the ranking.
-
-   `Generator/SteamApiDefinition.cs:105-119` decides a struct's `[StructLayout(Pack=…)]`
-   with a guess: *"if any field **after the first** mentions `CSteamID`/`CGameID`, use
-   `Pack=4`, else `Pack=8`."* The intent is right — `steamclientpublic.h:475` wraps
-   `CSteamID` and `CGameID` in `#pragma pack(push,1)`, so they are 8 bytes with
-   **alignment 1**, while a C# `ulong` wants alignment 8. But `Pack` is a whole-struct
-   switch and cannot express "this 8-byte field aligns to 1, that one aligns to 8", so it
-   is wrong in both directions:
-
-   - `P2PSessionConnectFail_t` — its `CSteamID` is the *first* field, so `Skip(1)` misses
-     it, the struct gets `Pack=8`, and C# reports **16 bytes against a native 9**.
-     `Marshal.PtrToStructure` therefore reads **7 bytes past the end** of Steam's callback
-     buffer. This one is live.
-   - `RequestPlayersForGameResultCallback_t` — `Skip(1)` *does* fire, so it gets `Pack=4`,
-     giving **56 bytes against a native 64**, with 9 of its 10 fields at the wrong offset.
-
-   Valve documents the surrounding rule at `steamclientpublic.h:1163-1176`: callback
-   structs are `#pragma pack(8)` on Windows and `#pragma pack(4)` on Linux/macOS. Combined
-   with the `pack(1)` on `CSteamID`/`CGameID`, no single `Pack` value can be correct in
-   general.
-
-   **An attempted fix was reverted — read this before trying the same thing.** The obvious
-   move is: model the pragma by putting `Pack = 1` on the C# `SteamId`/`GameId` structs, then
-   drop the heuristic and use the platform pack (8 Windows / 4 POSIX) everywhere. That
-   reasoning is sound and was verified in isolation — with an align-1 id struct,
-   `RequestPlayersForGameResultCallback_t` measures 64 on Windows and 56 on POSIX, and
-   `P2PSessionConnectFail_t` measures 9, all matching the headers exactly.
-
-   It does not work, for a reason that is easy to miss: **the generated structs do not use
-   `SteamId`.** They emit a raw `ulong`:
-
-   ```csharp
-   internal struct FriendsGetFollowerCount_t : ICallbackData
-   {
-       internal Result Result;   // m_eResult EResult
-       internal ulong SteamID;   // m_steamID CSteamID     <-- ulong, not SteamId
-       internal int Count;       // m_nCount int
-   }
-   ```
-
-   So `Pack = 1` on `SteamId` has no effect on them, and flipping their pack from 4 to 8
-   simply lets the `ulong` align to 8. Measured consequence: `FriendsGetFollowerCount_t`
-   went from 16 bytes to 24, and **16 was already correct** — native is `int@0`,
-   `CSteamID@4` (align 1), `int@12`, struct align 4, size 16.
-
-   That exposes something the original audit did not state: **the `Pack = 4` hack is
-   accidentally right much of the time.** When a 4-byte field precedes the `CSteamID`, the
-   native offset is 4 and a pack-4 `ulong` also lands at 4, so the layouts coincide. The 20
-   broken structs are exactly the ones where that coincidence fails. A wholesale pack flip
-   therefore trades 20 wrong structs for a different, larger set of wrong structs — the
-   layout baseline caught this immediately, showing 20 size changes of which several were
-   regressions.
-
-   **The actual fix** is to change the generated field *type*, not the pack: emit an
-   alignment-1 wrapper for `CSteamID`/`CGameID` fields (a `[StructLayout(Pack = 1)]` struct
-   wrapping a `ulong`, implicitly convertible both ways so consumers are unaffected), and
-   only then switch to the uniform platform pack. At that point the C# types model the
-   native ABI faithfully and no heuristic is needed. This touches every generated struct
-   with an id field plus their consumers, so it wants its own pass — but the layout baseline
-   now makes the outcome checkable, and the expected end state is precise: the 20 structs
-   listed in [01](01-marshaling-abi.md) move to their header-derived sizes and nothing else
-   moves at all.
-
-   Related and same root cause: 9 structs are larger in C# than native (over-read), and
-   `UserStatsReceived_t` is 20 vs a native 24 — that number is passed as `cubCallback` to
-   `GetAPICallResult`, so if Steam validates the size, `RequestUserStats` returns `null`
-   forever with no exception.
-
-   Also from [01](01-marshaling-abi.md), independent of packing: `MatchMakingKeyValuePair`
-   (server-browser filters) marshals as ANSI, so `"café"` goes out as `63 61 66 E9`
-   instead of UTF-8 and `"日本語"` becomes three literal `?` — unrecoverable. Twenty
-   `const char*` callback fields are typed as raw `string`, including
+1. **`MatchMakingKeyValuePair` and 20 `const char *` callback fields decode as ANSI, not
+   UTF-8** — independent of packing, from [01](01-marshaling-abi.md) F4/F5.
+   `MatchMakingKeyValuePair` (server-browser filters) marshals as ANSI, so `"café"` goes
+   out as `63 61 66 E9` instead of UTF-8 and `"日本語"` becomes three literal `?` —
+   unrecoverable. Twenty `const char*` callback fields are typed as raw `string`, including
    `HTML_NeedsPaint_t.PBGRA`, which is a **BGRA framebuffer pointer** being scanned for a
    NUL terminator.
-
-1. **`SteamApps` is registered on dedicated servers but has no game-server accessor** —
+2. **`SteamApps` is registered on dedicated servers but has no game-server accessor** —
    `Self` stays `IntPtr.Zero` and `SteamServer.AddInterface<T>` ignores the failure return
    (unlike `SteamClient`'s). Any `SteamApps.*` call on a pure dedicated server passes a
    NULL `this` to the flat API: an access violation, not a catchable exception. (04)
-2. **Shutdown races the async callback pump** — `Dispatch.LoopClientAsync` is `async void`
+3. **Shutdown races the async callback pump** — `Dispatch.LoopClientAsync` is `async void`
    with no cancellation or join, so an in-flight frame can call into a destroyed pipe.
    Crash-on-exit for headless servers. (02)
-3. **Pending call results are silently abandoned on shutdown** — proven: 5000 registered
+4. **Pending call results are silently abandoned on shutdown** — proven: 5000 registered
    continuations, 0 invoked. Every awaiting `Task` hangs forever. (02)
-4. **`Dispatch.runningFrame` is a non-volatile check-then-set** — 872,129 simultaneous
+5. **`Dispatch.runningFrame` is a non-volatile check-then-set** — 872,129 simultaneous
    entries measured in a 2M-iteration race. Concurrent `FreeLastCallback` is something
    Valve explicitly forbids. (02)
-5. **Server auth tickets cannot be cancelled** — `AuthTicket.Cancel()` hard-codes
+6. **Server auth tickets cannot be cancelled** — `AuthTicket.Cancel()` hard-codes
    `SteamUser.Internal`, which is never registered server-side, so `Dispose()` throws. (04)
-6. **`SteamServer.Shutdown()` does not reset cached statics**, so a second `Init` silently
+7. **`SteamServer.Shutdown()` does not reset cached statics**, so a second `Init` silently
    skips `ModDir`/`GameDescription`/`MaxPlayers`. (04)
-7. **Callback exceptions are swallowed** and permanently drop the remaining handlers for
+8. **Callback exceptions are swallowed** and permanently drop the remaining handlers for
    that callback. (02)
-8. **`Achievement.GlobalUnlocked` always returns `-1`** — its prerequisite call is never
-   made. (03)
-9. **`SteamNetworkingSockets.CreateFakeUDPPort` returns an unusable handle** — the backing
-   class is empty and its `Self` is permanently zero. (03)
-10. **`GSStatsUnloaded_t` is unreachable** — a genuine upstream callback-ID collision at
+9. **`SteamInputActionEvent_t` is 16 bytes against a native 33** — the generator cannot emit
+   its C `union`, so it drops it. Unreachable today (`EnableActionEventCallbacks` is filtered
+   out as deprecated), but it is a compiled-in landmine. (01, F6)
+10. **`Achievement.GlobalUnlocked` always returns `-1`** — its prerequisite call is never
+    made. (03)
+11. **`SteamNetworkingSockets.CreateFakeUDPPort` returns an unusable handle** — the backing
+    class is empty and its `Self` is permanently zero. (03)
+12. **`GSStatsUnloaded_t` is unreachable** — a genuine upstream callback-ID collision at
     1108 that the generator resolves inconsistently with the identical one at 1112. (05)
 
 ### The headline numbers
@@ -192,4 +200,15 @@ contributed to the battery bug. None require Steam. Report 05 details the recomm
 test-project layout.
 
 **Already in CI.** `verify-native-conformance.ps1` runs the full 17-binary export sweep on
-every push, so the two most severe defects found here cannot silently reappear.
+every push, and `verify-struct-layout.ps1` pins the marshalled size, pack and every field
+offset of all 240 ABI structs against `Tools/baselines/layout-win64.txt`. Between them the
+three most severe defects found here cannot silently reappear: a symbol Valve deleted, and
+a generator change that quietly re-lays-out dozens of structs at once.
+
+**Still worth adding.** The layout baseline pins what the layout *is*, not what it *should
+be* — it catches drift but would happily accept a wrong layout that was recorded
+deliberately. The proof that the current layouts are correct comes from a header-derived
+MSVC-x64 layout model (`#pragma pack` context recovered from the 45 SDK headers, field
+lists read from `steam_api.json`) diffed against `Marshal.SizeOf`/`OffsetOf`. That model
+still lives outside the repository, so the correctness argument is reproducible by hand but
+not by CI. Committing it as a third `Tools/` project would close the last gap.

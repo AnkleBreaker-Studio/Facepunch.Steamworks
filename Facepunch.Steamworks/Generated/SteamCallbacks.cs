@@ -88,12 +88,12 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct ValidateAuthTicketResponse_t : ICallbackData
 	{
-		internal ulong SteamID; // m_SteamID CSteamID
+		internal PackedId SteamID; // m_SteamID CSteamID
 		internal AuthResponse AuthSessionResponse; // m_eAuthSessionResponse EAuthSessionResponse
-		internal ulong OwnerSteamID; // m_OwnerSteamID CSteamID
+		internal PackedId OwnerSteamID; // m_OwnerSteamID CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(ValidateAuthTicketResponse_t) );
@@ -263,11 +263,11 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct GameLobbyJoinRequested_t : ICallbackData
 	{
-		internal ulong SteamIDLobby; // m_steamIDLobby CSteamID
-		internal ulong SteamIDFriend; // m_steamIDFriend CSteamID
+		internal PackedId SteamIDLobby; // m_steamIDLobby CSteamID
+		internal PackedId SteamIDFriend; // m_steamIDFriend CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(GameLobbyJoinRequested_t) );
@@ -279,7 +279,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct AvatarImageLoaded_t : ICallbackData
 	{
-		internal ulong SteamID; // m_steamID CSteamID
+		internal PackedId SteamID; // m_steamID CSteamID
 		internal int Image; // m_iImage int
 		internal int Wide; // m_iWide int
 		internal int Tall; // m_iTall int
@@ -294,7 +294,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct ClanOfficerListResponse_t : ICallbackData
 	{
-		internal ulong SteamIDClan; // m_steamIDClan CSteamID
+		internal PackedId SteamIDClan; // m_steamIDClan CSteamID
 		internal int COfficers; // m_cOfficers int
 		internal byte Success; // m_bSuccess uint8
 		
@@ -308,7 +308,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct FriendRichPresenceUpdate_t : ICallbackData
 	{
-		internal ulong SteamIDFriend; // m_steamIDFriend CSteamID
+		internal PackedId SteamIDFriend; // m_steamIDFriend CSteamID
 		internal AppId AppID; // m_nAppID AppId_t
 		
 		#region SteamCallback
@@ -321,7 +321,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal unsafe struct GameRichPresenceJoinRequested_t : ICallbackData
 	{
-		internal ulong SteamIDFriend; // m_steamIDFriend CSteamID
+		internal PackedId SteamIDFriend; // m_steamIDFriend CSteamID
 		internal string ConnectUTF8() { fixed ( byte* b = Connect ) return Steamworks.Utility.ReadNullTerminatedUTF8String( b, 256 ); }
 		internal fixed byte Connect[256]; // m_rgchConnect char [256]
 		
@@ -332,11 +332,11 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct GameConnectedClanChatMsg_t : ICallbackData
 	{
-		internal ulong SteamIDClanChat; // m_steamIDClanChat CSteamID
-		internal ulong SteamIDUser; // m_steamIDUser CSteamID
+		internal PackedId SteamIDClanChat; // m_steamIDClanChat CSteamID
+		internal PackedId SteamIDUser; // m_steamIDUser CSteamID
 		internal int MessageID; // m_iMessageID int
 		
 		#region SteamCallback
@@ -346,11 +346,11 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct GameConnectedChatJoin_t : ICallbackData
 	{
-		internal ulong SteamIDClanChat; // m_steamIDClanChat CSteamID
-		internal ulong SteamIDUser; // m_steamIDUser CSteamID
+		internal PackedId SteamIDClanChat; // m_steamIDClanChat CSteamID
+		internal PackedId SteamIDUser; // m_steamIDUser CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(GameConnectedChatJoin_t) );
@@ -359,11 +359,11 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct GameConnectedChatLeave_t : ICallbackData
 	{
-		internal ulong SteamIDClanChat; // m_steamIDClanChat CSteamID
-		internal ulong SteamIDUser; // m_steamIDUser CSteamID
+		internal PackedId SteamIDClanChat; // m_steamIDClanChat CSteamID
+		internal PackedId SteamIDUser; // m_steamIDUser CSteamID
 		[MarshalAs(UnmanagedType.I1)]
 		internal bool Kicked; // m_bKicked bool
 		[MarshalAs(UnmanagedType.I1)]
@@ -392,7 +392,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct JoinClanChatRoomCompletionResult_t : ICallbackData
 	{
-		internal ulong SteamIDClanChat; // m_steamIDClanChat CSteamID
+		internal PackedId SteamIDClanChat; // m_steamIDClanChat CSteamID
 		internal RoomEnter ChatRoomEnterResponse; // m_eChatRoomEnterResponse EChatRoomEnterResponse
 		
 		#region SteamCallback
@@ -405,7 +405,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct GameConnectedFriendChatMsg_t : ICallbackData
 	{
-		internal ulong SteamIDUser; // m_steamIDUser CSteamID
+		internal PackedId SteamIDUser; // m_steamIDUser CSteamID
 		internal int MessageID; // m_iMessageID int
 		
 		#region SteamCallback
@@ -415,11 +415,11 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct FriendsGetFollowerCount_t : ICallbackData
 	{
 		internal Result Result; // m_eResult EResult
-		internal ulong SteamID; // m_steamID CSteamID
+		internal PackedId SteamID; // m_steamID CSteamID
 		internal int Count; // m_nCount int
 		
 		#region SteamCallback
@@ -429,11 +429,11 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct FriendsIsFollowing_t : ICallbackData
 	{
 		internal Result Result; // m_eResult EResult
-		internal ulong SteamID; // m_steamID CSteamID
+		internal PackedId SteamID; // m_steamID CSteamID
 		[MarshalAs(UnmanagedType.I1)]
 		internal bool IsFollowing; // m_bIsFollowing bool
 		
@@ -444,11 +444,11 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal unsafe struct FriendsEnumerateFollowingList_t : ICallbackData
 	{
 		internal Result Result; // m_eResult EResult
-		internal fixed ulong GSteamID[50]; // m_rgSteamID CSteamID [50]
+		internal fixed byte GSteamID[400]; // m_rgSteamID CSteamID [50]
 		internal int ResultsReturned; // m_nResultsReturned int32
 		internal int TotalResultCount; // m_nTotalResultCount int32
 		
@@ -502,7 +502,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct EquippedProfileItemsChanged_t : ICallbackData
 	{
-		internal ulong SteamID; // m_steamID CSteamID
+		internal PackedId SteamID; // m_steamID CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(EquippedProfileItemsChanged_t) );
@@ -511,11 +511,11 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct EquippedProfileItems_t : ICallbackData
 	{
 		internal Result Result; // m_eResult EResult
-		internal ulong SteamID; // m_steamID CSteamID
+		internal PackedId SteamID; // m_steamID CSteamID
 		[MarshalAs(UnmanagedType.I1)]
 		internal bool HasAnimatedAvatar; // m_bHasAnimatedAvatar bool
 		[MarshalAs(UnmanagedType.I1)]
@@ -792,12 +792,12 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct PSNGameBootInviteResult_t : ICallbackData
 	{
 		[MarshalAs(UnmanagedType.I1)]
 		internal bool GameBootInviteExists; // m_bGameBootInviteExists bool
-		internal ulong SteamIDLobby; // m_steamIDLobby CSteamID
+		internal PackedId SteamIDLobby; // m_steamIDLobby CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(PSNGameBootInviteResult_t) );
@@ -818,13 +818,13 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct SearchForGameProgressCallback_t : ICallbackData
 	{
 		internal ulong LSearchID; // m_ullSearchID uint64
 		internal Result Result; // m_eResult EResult
-		internal ulong LobbyID; // m_lobbyID CSteamID
-		internal ulong SteamIDEndedSearch; // m_steamIDEndedSearch CSteamID
+		internal PackedId LobbyID; // m_lobbyID CSteamID
+		internal PackedId SteamIDEndedSearch; // m_steamIDEndedSearch CSteamID
 		internal int SecondsRemainingEstimate; // m_nSecondsRemainingEstimate int32
 		internal int CPlayersSearching; // m_cPlayersSearching int32
 		
@@ -835,14 +835,14 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct SearchForGameResultCallback_t : ICallbackData
 	{
 		internal ulong LSearchID; // m_ullSearchID uint64
 		internal Result Result; // m_eResult EResult
 		internal int CountPlayersInGame; // m_nCountPlayersInGame int32
 		internal int CountAcceptedGame; // m_nCountAcceptedGame int32
-		internal ulong SteamIDHost; // m_steamIDHost CSteamID
+		internal PackedId SteamIDHost; // m_steamIDHost CSteamID
 		[MarshalAs(UnmanagedType.I1)]
 		internal bool FinalCallback; // m_bFinalCallback bool
 		
@@ -866,13 +866,13 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct RequestPlayersForGameResultCallback_t : ICallbackData
 	{
 		internal Result Result; // m_eResult EResult
 		internal ulong LSearchID; // m_ullSearchID uint64
-		internal ulong SteamIDPlayerFound; // m_SteamIDPlayerFound CSteamID
-		internal ulong SteamIDLobby; // m_SteamIDLobby CSteamID
+		internal PackedId SteamIDPlayerFound; // m_SteamIDPlayerFound CSteamID
+		internal PackedId SteamIDLobby; // m_SteamIDLobby CSteamID
 		internal RequestPlayersForGameResultCallback_t.PlayerAcceptState_t PlayerAcceptState; // m_ePlayerAcceptState RequestPlayersForGameResultCallback_t::PlayerAcceptState_t
 		internal int PlayerIndex; // m_nPlayerIndex int32
 		internal int TotalPlayersFound; // m_nTotalPlayersFound int32
@@ -908,12 +908,12 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct SubmitPlayerResultResultCallback_t : ICallbackData
 	{
 		internal Result Result; // m_eResult EResult
 		internal ulong UllUniqueGameID; // ullUniqueGameID uint64
-		internal ulong SteamIDPlayer; // steamIDPlayer CSteamID
+		internal PackedId SteamIDPlayer; // steamIDPlayer CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(SubmitPlayerResultResultCallback_t) );
@@ -935,12 +935,12 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal unsafe struct JoinPartyCallback_t : ICallbackData
 	{
 		internal Result Result; // m_eResult EResult
 		internal ulong BeaconID; // m_ulBeaconID PartyBeaconID_t
-		internal ulong SteamIDBeaconOwner; // m_SteamIDBeaconOwner CSteamID
+		internal PackedId SteamIDBeaconOwner; // m_SteamIDBeaconOwner CSteamID
 		internal string ConnectStringUTF8() { fixed ( byte* b = ConnectString ) return Steamworks.Utility.ReadNullTerminatedUTF8String( b, 256 ); }
 		internal fixed byte ConnectString[256]; // m_rgchConnectString char [256]
 		
@@ -964,11 +964,11 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct ReservationNotificationCallback_t : ICallbackData
 	{
 		internal ulong BeaconID; // m_ulBeaconID PartyBeaconID_t
-		internal ulong SteamIDJoiner; // m_steamIDJoiner CSteamID
+		internal PackedId SteamIDJoiner; // m_steamIDJoiner CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(ReservationNotificationCallback_t) );
@@ -1397,12 +1397,12 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct UserStatsReceived_t : ICallbackData
 	{
 		internal ulong GameID; // m_nGameID uint64
 		internal Result Result; // m_eResult EResult
-		internal ulong SteamIDUser; // m_steamIDUser CSteamID
+		internal PackedId SteamIDUser; // m_steamIDUser CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(UserStatsReceived_t) );
@@ -1502,7 +1502,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct UserStatsUnloaded_t : ICallbackData
 	{
-		internal ulong SteamIDUser; // m_steamIDUser CSteamID
+		internal PackedId SteamIDUser; // m_steamIDUser CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(UserStatsUnloaded_t) );
@@ -1514,7 +1514,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal unsafe struct UserAchievementIconFetched_t : ICallbackData
 	{
-		internal GameId GameID; // m_nGameID CGameID
+		internal PackedId GameID; // m_nGameID CGameID
 		internal string AchievementNameUTF8() { fixed ( byte* b = AchievementName ) return Steamworks.Utility.ReadNullTerminatedUTF8String( b, 128 ); }
 		internal fixed byte AchievementName[128]; // m_rgchAchievementName char [128]
 		[MarshalAs(UnmanagedType.I1)]
@@ -1640,7 +1640,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct P2PSessionRequest_t : ICallbackData
 	{
-		internal ulong SteamIDRemote; // m_steamIDRemote CSteamID
+		internal PackedId SteamIDRemote; // m_steamIDRemote CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(P2PSessionRequest_t) );
@@ -1652,7 +1652,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct P2PSessionConnectFail_t : ICallbackData
 	{
-		internal ulong SteamIDRemote; // m_steamIDRemote CSteamID
+		internal PackedId SteamIDRemote; // m_steamIDRemote CSteamID
 		internal byte P2PSessionError; // m_eP2PSessionError uint8
 		
 		#region SteamCallback
@@ -1940,12 +1940,12 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct SteamInputConfigurationLoaded_t : ICallbackData
 	{
 		internal AppId AppID; // m_unAppID AppId_t
 		internal ulong DeviceHandle; // m_ulDeviceHandle InputHandle_t
-		internal ulong MappingCreator; // m_ulMappingCreator CSteamID
+		internal PackedId MappingCreator; // m_ulMappingCreator CSteamID
 		internal uint MajorRevision; // m_unMajorRevision uint32
 		internal uint MinorRevision; // m_unMinorRevision uint32
 		[MarshalAs(UnmanagedType.I1)]
@@ -2636,11 +2636,11 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct SteamInventoryEligiblePromoItemDefIDs_t : ICallbackData
 	{
 		internal Result Result; // m_result EResult
-		internal ulong SteamID; // m_steamID CSteamID
+		internal PackedId SteamID; // m_steamID CSteamID
 		internal int UmEligiblePromoItemDefs; // m_numEligiblePromoItemDefs int
 		[MarshalAs(UnmanagedType.I1)]
 		internal bool CachedData; // m_bCachedData bool
@@ -2881,11 +2881,11 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct GSClientApprove_t : ICallbackData
 	{
-		internal ulong SteamID; // m_SteamID CSteamID
-		internal ulong OwnerSteamID; // m_OwnerSteamID CSteamID
+		internal PackedId SteamID; // m_SteamID CSteamID
+		internal PackedId OwnerSteamID; // m_OwnerSteamID CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(GSClientApprove_t) );
@@ -2897,7 +2897,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal unsafe struct GSClientDeny_t : ICallbackData
 	{
-		internal ulong SteamID; // m_SteamID CSteamID
+		internal PackedId SteamID; // m_SteamID CSteamID
 		internal DenyReason DenyReason; // m_eDenyReason EDenyReason
 		internal string OptionalTextUTF8() { fixed ( byte* b = OptionalText ) return Steamworks.Utility.ReadNullTerminatedUTF8String( b, 128 ); }
 		internal fixed byte OptionalText[128]; // m_rgchOptionalText char [128]
@@ -2912,7 +2912,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct GSClientKick_t : ICallbackData
 	{
-		internal ulong SteamID; // m_SteamID CSteamID
+		internal PackedId SteamID; // m_SteamID CSteamID
 		internal DenyReason DenyReason; // m_eDenyReason EDenyReason
 		
 		#region SteamCallback
@@ -2965,11 +2965,11 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct GSClientGroupStatus_t : ICallbackData
 	{
-		internal ulong SteamIDUser; // m_SteamIDUser CSteamID
-		internal ulong SteamIDGroup; // m_SteamIDGroup CSteamID
+		internal PackedId SteamIDUser; // m_SteamIDUser CSteamID
+		internal PackedId SteamIDGroup; // m_SteamIDGroup CSteamID
 		[MarshalAs(UnmanagedType.I1)]
 		internal bool Member; // m_bMember bool
 		[MarshalAs(UnmanagedType.I1)]
@@ -3013,14 +3013,14 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct ComputeNewPlayerCompatibilityResult_t : ICallbackData
 	{
 		internal Result Result; // m_eResult EResult
 		internal int CPlayersThatDontLikeCandidate; // m_cPlayersThatDontLikeCandidate int
 		internal int CPlayersThatCandidateDoesntLike; // m_cPlayersThatCandidateDoesntLike int
 		internal int CClanPlayersThatDontLikeCandidate; // m_cClanPlayersThatDontLikeCandidate int
-		internal ulong SteamIDCandidate; // m_SteamIDCandidate CSteamID
+		internal PackedId SteamIDCandidate; // m_SteamIDCandidate CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(ComputeNewPlayerCompatibilityResult_t) );
@@ -3029,11 +3029,11 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct GSStatsReceived_t : ICallbackData
 	{
 		internal Result Result; // m_eResult EResult
-		internal ulong SteamIDUser; // m_steamIDUser CSteamID
+		internal PackedId SteamIDUser; // m_steamIDUser CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(GSStatsReceived_t) );
@@ -3042,11 +3042,11 @@ namespace Steamworks.Data
 		#endregion
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct GSStatsStored_t : ICallbackData
 	{
 		internal Result Result; // m_eResult EResult
-		internal ulong SteamIDUser; // m_steamIDUser CSteamID
+		internal PackedId SteamIDUser; // m_steamIDUser CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(GSStatsStored_t) );
@@ -3058,7 +3058,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct GSStatsUnloaded_t : ICallbackData
 	{
-		internal ulong SteamIDUser; // m_steamIDUser CSteamID
+		internal PackedId SteamIDUser; // m_steamIDUser CSteamID
 		
 		#region SteamCallback
 		public static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof(GSStatsUnloaded_t) );

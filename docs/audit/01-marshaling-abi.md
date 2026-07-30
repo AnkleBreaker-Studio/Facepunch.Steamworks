@@ -15,17 +15,19 @@ Steam was **not** installed and no native Steam call was made. Everything below 
 | Structs compared field-by-field (POSIX x64) | **240** |
 | P/Invoke declarations inspected | **1018** |
 | Callback IDs cross-checked (C# ↔ headers ↔ json) | **219** |
-| **Structs with proven wrong field offsets** | **5** (Windows x64), **1** (POSIX x64) |
-| **Structs with proven wrong total size** | **17** (Windows x64), **5** (POSIX x64) |
-| **String-encoding defects** | **3 sites** (22 fields) |
+| **Structs with proven wrong field offsets** | **5** (Windows x64), **1** (POSIX x64) — all **FIXED** |
+| **Structs with proven wrong total size** | **17** (Windows x64), **5** (POSIX x64) — **16 FIXED**, 1 still open (F6) |
+| **String-encoding defects** | **3 sites** (22 fields) — open |
 
 The size counts are 15 found by the automated diff plus 2 computed by hand — `RequestPlayersForGameResultCallback_t` and `SteamInputActionEvent_t` contain nested types the diff tool could not resolve, so they were derived manually from the header text (F1a, F6).
 
 **Overall state.** The *mechanical* parts of the binding are in very good shape: calling convention is `Cdecl` everywhere (1018/1018), every `bool`-returning P/Invoke has `[return: MarshalAs(UnmanagedType.I1)]` (0 violations), every `bool` parameter has `I1` (0 violations), no P/Invoke takes a raw `System.String`, all 219 callback IDs match the headers exactly, and the UTF-8 string helper layer (`Utf8StringToNative` / `Utf8StringPointer` / `Helpers.MemoryToString`) is correct and consistent across `net46` / `netstandard2.1` / `net6.0`.
 
-The defects are concentrated in **one place**: the generator's `IsPack4OnWindows` heuristic (`Generator/SteamApiDefinition.cs:105-119`), which decides `[StructLayout(Pack = …)]` for every generated struct. It is a two-line guess that is wrong in two opposite directions, and it produces 20 mis-laid-out structs. A secondary cluster is `char`-typed struct members being marshaled with the platform ANSI code page instead of UTF-8.
+The defects were concentrated in **one place**: the generator's `IsPack4OnWindows` heuristic (`Generator/SteamApiDefinition.cs`), which decided `[StructLayout(Pack = …)]` for every generated struct. It was a two-line guess, wrong in two opposite directions, and it mis-laid-out 17 structs. **F1, F2 and F3 are now fixed** — they share one root cause, and the *Resolution* note at the end of F1 covers all three. A secondary cluster, still open, is `char`-typed struct members being marshaled with the platform ANSI code page instead of UTF-8 (F4/F5).
 
-None of the 5 offset defects sit on a code path Facepunch itself wires up today, but 3 of the size defects do (`FriendRichPresenceUpdate_t`, `GameConnectedFriendChatMsg_t`, `P2PSessionConnectFail_t` are all `Dispatch.Install`ed), and `UserStatsReceived_t` — the backing type for `RequestUserStats` — has a wrong `DataSize` that is passed straight to Steam.
+None of the 5 offset defects sat on a code path Facepunch itself wires up, but 3 of the size defects did (`FriendRichPresenceUpdate_t`, `GameConnectedFriendChatMsg_t`, `P2PSessionConnectFail_t` are all `Dispatch.Install`ed), and `UserStatsReceived_t` — the backing type for `RequestUserStats` — had a wrong `DataSize` that was passed straight to Steam.
+
+> **A correction to an earlier revision of this report.** F1's prose claimed "20 mis-laid-out structs". That figure did not come from the tables below; it was the number of size *changes* produced by a fix that was attempted and then reverted, several of which were regressions rather than corrections. The count the evidence in this report actually supports is **17**: 5 offset defects (F1) + 9 over-reads (F2) + 2 under-reads (F3) + `SteamInputActionEvent_t` (F6). Sixteen are fixed; F6 is not a packing defect (the generator drops the struct's `union`) and remains open.
 
 ---
 
@@ -89,15 +91,17 @@ Two independent sweeps were run in parallel: a callback-ID reconciliation (heade
 
 ## Findings
 
-### F1 — CRITICAL — `Pack = 4` misaligns genuine 8-byte fields, shifting every subsequent field
+### F1 — CRITICAL — `Pack = 4` misaligns genuine 8-byte fields, shifting every subsequent field — **FIXED**
 
 **Severity:** CRITICAL (silent memory corruption — reads structurally garbage values)
+
+**Status:** FIXED. See *Resolution* at the end of this finding; it also resolves F2 and F3.
 
 **Location (root cause):** `Generator/SteamApiDefinition.cs:105-119`
 **Location (emitters):** `Generator/CodeWriter/Callbacks.cs:38`, `Generator/CodeWriter/Struct.cs:38`
 **Location (constant):** `Facepunch.Steamworks/Utility/Platform.cs:25` — `public const int StructPackSize = 4;`
 
-**What's wrong.** The generator decides packing with this heuristic:
+**What was wrong.** The generator decided packing with this heuristic:
 
 ```csharp
 public bool IsPack4OnWindows
@@ -228,18 +232,63 @@ Here the failure is the reverse: `Pack = 4` is *too large*. C++ places the 1-ali
 
 None of these five are currently `Dispatch.Install`ed by Facepunch's own wrappers (verified: 0 references outside `Generated/`), so today the corruption is only reachable by a consumer using `Dispatch.Install<T>` directly, or by hooking the public `Dispatch.OnDebugCallback`, which marshals *every* arriving callback through `CallbackTypeFactory.All` (`Dispatch.cs:168-171`). That makes it latent rather than live — but it is unambiguously wrong, and F1e/F1c are ordinary matchmaking/parties callbacks a game could reasonably subscribe to.
 
-**Recommended fix.** Stop using struct-wide `Pack` as a proxy for one type's alignment. Two clean options:
+---
 
-1. **Preferred — model the type, not the struct.** Emit `SteamId`/`GameId` as `[StructLayout(LayoutKind.Sequential, Pack = 1)] struct { ulong Value; }` so their C# alignment is 1, exactly like the C++ types. Then every generated struct can carry the platform pack (`8` on Windows, `4` on POSIX) verbatim, matching the header, and the `IsPack4OnWindows` heuristic can be deleted entirely.
-2. **Alternative — emit explicit offsets.** Compute each field's offset from the header rules at generation time and emit `LayoutKind.Explicit` with `[FieldOffset]`, plus an explicit `Size`. More verbose but leaves nothing to inference.
+#### Resolution — F1, F2 and F3
 
-Either way, add a generated self-test that asserts `Marshal.SizeOf(T)` equals the header-derived size for all 219 callback structs; that single test would have caught all 20 defects in this report.
+The fix is *model the type, not the struct*, and it lands in three parts.
+
+**1. An alignment-1 id type.** `Facepunch.Steamworks/Structs/PackedId.cs`:
+
+```csharp
+[StructLayout( LayoutKind.Sequential, Pack = 1 )]
+internal struct PackedId { internal ulong Value; /* implicit ⇄ ulong, SteamId, GameId */ }
+```
+
+`Pack = 1` is load-bearing and the file says so at length. It is deliberately a *new* type rather than `Pack = 1` on `SteamId`: `SteamId` is public and is a by-value P/Invoke argument in over a hundred generated methods, so it stays untouched. The implicit conversions mean every consumer compiled unchanged except one (see part 2).
+
+**2. The generator emits it.** `Generator/CodeWriter/Struct.cs::FieldType` maps every `CSteamID`/`CGameID` member to `PackedId` instead of a raw `ulong`. Emitting `SteamId` would not have worked: the generated structs never used it — `ToManagedType` collapsed `CSteamID` to `ulong` — which is why the first attempt at this fix (putting `Pack = 1` on `SteamId` and flipping the pack) was reverted. It changed 20 struct sizes, several of them regressions: `FriendsGetFollowerCount_t` went 16 → 24 when 16 was already correct.
+
+The SDK's one native id *array*, `FriendsEnumerateFollowingList_t.m_rgSteamID` (`CSteamID[50]`), becomes `fixed byte[400]`. A C# `fixed` buffer takes its alignment from its element type and only accepts primitives, so `fixed ulong[50]` would sit on an 8-byte boundary where native sits on 1 — under `Pack = 8` the array would have moved from offset 4 to 8 and the struct grown 412 → 424. `byte` gives the same 400 bytes at alignment 1. Its one consumer, `SteamFriends.AddFollowedIds`, now reassembles each id byte-wise so no alignment is assumed.
+
+**3. Only then, delete the heuristic.** `IsPack4OnWindows` is gone and every generated struct carries `Platform.StructPlatformPackSize` — the header's own value, 8 on Windows and 4 on POSIX. The `MatchMakingKeyValuePair_t` special case inside it was dead code: `Cleanup.ShouldCreate` excludes that struct from generation entirely (it is hand-written in `Structs/MatchMakingKeyValuePair.cs`), and its measured layout is unchanged at 512 bytes. `Platform.StructPackSize` survives only as that hand-written struct's pack.
+
+**Measured outcome.** Windows x64, `Marshal.SizeOf`/`OffsetOf` against the header-derived model:
+
+| Struct | was | now | header-derived | finding |
+|---|---|---|---|---|
+| `RequestPlayersForGameResultCallback_t` | 56 | **64** | 64 | F1a |
+| `SteamInputConfigurationLoaded_t` | 32 | **40** | 40 | F1b |
+| `JoinPartyCallback_t` | 276 | **280** | 280 | F1c |
+| `SubmitPlayerResultResultCallback_t` | 20 | **24** | 24 | F1d |
+| `PSNGameBootInviteResult_t` | 12 | **9** | 9 | F1e |
+| `P2PSessionConnectFail_t` | 16 | **9** | 9 | F2 |
+| `AvatarImageLoaded_t` | 24 | **20** | 20 | F2 |
+| `FriendRichPresenceUpdate_t` | 16 | **12** | 12 | F2 |
+| `JoinClanChatRoomCompletionResult_t` | 16 | **12** | 12 | F2 |
+| `GameConnectedFriendChatMsg_t` | 16 | **12** | 12 | F2 |
+| `GSClientDeny_t` | 144 | **140** | 140 | F2 |
+| `GSClientKick_t` | 16 | **12** | 12 | F2 |
+| `GameConnectedChatLeave_t` | 20 | **18** | 18 | F2 |
+| `GSClientGroupStatus_t` | 20 | **18** | 18 | F2 |
+| `UserStatsReceived_t` | 20 | **24** | 24 | F3 |
+| `SearchForGameProgressCallback_t` | 36 | **40** | 40 | F3 |
+
+Every field offset in F1a–F1e now matches the C++ column of the tables above exactly. The full header-derived diff goes from **19 mismatches to 0** on Windows and **4 to 0** on POSIX; the only entries left are the four hand-written structs whose field *count* deliberately differs from the C++ definition (`NetIdentity`, `ConnectionInfo`, `NetPingLocation`, `NetKeyValue`) while their total size matches — a known and legitimate pattern, see *Verified-correct areas*.
+
+A further **17** structs changed only their recorded `Pack` attribute, with size and every field offset byte-identical: `gameserveritem_t`, `FriendGameInfo_t`, `ValidateAuthTicketResponse_t`, `GameLobbyJoinRequested_t`, `GameConnectedClanChatMsg_t`, `GameConnectedChatJoin_t`, `FriendsGetFollowerCount_t`, `FriendsIsFollowing_t`, `FriendsEnumerateFollowingList_t`, `EquippedProfileItems_t`, `SearchForGameResultCallback_t`, `ReservationNotificationCallback_t`, `SteamInventoryEligiblePromoItemDefIDs_t`, `GSClientApprove_t`, `ComputeNewPlayerCompatibilityResult_t`, `GSStatsReceived_t`, `GSStatsStored_t`. These are exactly the "accidentally right" set: a 4-byte field preceded the id, so a pack-4 `ulong` happened to land on the native offset. Nothing else in the assembly moved, and **no public type changed** — `PackedId` is `internal`, and the compiler would have rejected any public member exposing it.
+
+Pinned by `verify-struct-layout.ps1` against `Tools/baselines/layout-win64.txt`.
+
+**Not fixed by this:** `SteamInputActionEvent_t` (F6). Its size is wrong because the generator drops its `union`, not because of packing, so no `Pack` value can correct it. It is unchanged at 16 bytes against a native 33.
 
 ---
 
-### F2 — HIGH — 9 callback structs are larger in C# than in native memory (out-of-bounds read)
+### F2 — HIGH — 9 callback structs are larger in C# than in native memory (out-of-bounds read) — **FIXED**
 
 **Severity:** HIGH (reads past the end of Steam's callback buffer)
+
+**Status:** FIXED — same root cause as F1, see the *Resolution* note there. All nine now measure their header-derived size.
 
 **Root cause:** the `Fields.Skip(1)` in `Generator/SteamApiDefinition.cs:110,113`. When `CSteamID`/`CGameID` is the **first** field it is skipped, so `IsPack4OnWindows` returns `false` and the struct gets `Pack = 8`. Offsets still line up (the SteamID is at 0 either way), but the C# struct's *alignment* becomes 8 because of the `ulong`, while the C++ struct's alignment is only 4 or 1 — so the CLR adds tail padding that native does not have.
 
@@ -304,13 +353,17 @@ Three of these are live today (`Dispatch.Install` sites): `FriendRichPresenceUpd
 
 Whether the over-read ever faults depends on Steam's internal allocator — if the callback buffer is a pooled block the extra bytes are almost always mapped, which is why this has gone unnoticed. I cannot test that here. It is nevertheless an out-of-bounds read and is exactly the class of thing that turns into a rare, unreproducible crash.
 
-**Recommended fix.** Same as F1 — make `SteamId`/`GameId` 1-aligned so the C# struct's natural alignment matches C++. As defence in depth, `Dispatch.ProcessCallback` could refuse to marshal when `msg.DataSize < T._datasize` and surface it through `OnException` instead of reading anyway.
+**Fix applied.** See the *Resolution* note under F1: the id members are now `PackedId`, a `Pack = 1` wrapper, so the C# struct's natural alignment matches C++ and the tail padding disappears. All nine measure their header-derived size — the +7 over-read on `P2PSessionConnectFail_t` is 0.
+
+**Still worth doing, as defence in depth:** `Dispatch.ProcessCallback` could refuse to marshal when `msg.DataSize < T._datasize` and surface it through `OnException` instead of reading anyway. That would turn any *future* layout mistake into a diagnosable error rather than an out-of-bounds read.
 
 ---
 
-### F3 — HIGH — `UserStatsReceived_t` is *smaller* than native; its `DataSize` is passed to `GetAPICallResult`
+### F3 — HIGH — `UserStatsReceived_t` is *smaller* than native; its `DataSize` is passed to `GetAPICallResult` — **FIXED**
 
 **Severity:** HIGH (silent permanent failure of an async API)
+
+**Status:** FIXED — same root cause as F1, see the *Resolution* note there. `Marshal.SizeOf(UserStatsReceived_t)` is now **24**, so `CallResult` passes `cubCallback = 24` for a 24-byte result. `SearchForGameProgressCallback_t` is now 40. The open question below — whether Steam *rejects* a short `cubCallback` — is moot for these two, since the value is now correct either way.
 
 **Location:** `Facepunch.Steamworks/Generated/SteamCallbacks.cs:1425-1435`; consumed at `Facepunch.Steamworks/Callbacks/CallResult.cs:54,59` and `Generated/Interfaces/ISteamUserStats.cs:218-221`
 
@@ -354,7 +407,7 @@ virtual bool GetAPICallResult( SteamAPICall_t hSteamAPICall, void *pCallback, in
 
 **Honest caveat.** I have *proven* the size mismatch (measured 20, header-derived 24). I have **not** proven that Steam rejects it — that requires a live client. If Steam only checks `cubCallback >= actual`, this degrades to a truncated-copy rather than a hard failure. Either way the value passed is wrong. This is the one finding in this report where the *consequence*, not the defect, needs runtime confirmation.
 
-**Recommended fix.** Same root fix as F1/F2. Once `SteamId` is 1-aligned and the struct carries `Pack = 8` on Windows, `Marshal.SizeOf` yields 24 and the call is correct.
+**Fix applied.** Same root fix as F1/F2 — with the id member typed `PackedId` and the struct carrying `Pack = 8` on Windows, `Marshal.SizeOf` yields 24 and the call is correct. Note the fix is *not* "make `SteamId` 1-aligned", which is what an earlier revision of this report recommended and what the reverted attempt tried: these structs never used `SteamId`. See the *Resolution* note under F1.
 
 ---
 
@@ -578,17 +631,21 @@ Every `SizeConst` matches its `#define`/array bound in the headers: `gameserveri
 113 enums in the assembly; **112** have underlying type `System.Int32`, matching the C++ default enum type (4 bytes). The single exception is `Steamworks.Data.GameIdType : byte` (`Structs/GameId.cs:5`), which is *not* an ABI type — it is a helper for the `CGameID` bitfield accessor and is never a struct member or P/Invoke parameter. The `GameId` bitfield decomposition (`Structs/GameId.cs:33-48`) correctly reproduces MSVC/gcc little-endian bitfield allocation for `m_nAppID:24 / m_nType:8 / m_nModID:32`.
 
 ### POSIX target
-Rebuilt and re-measured against `VALVE_CALLBACK_PACK_SMALL` (pack 4). Only **4** real mismatches on POSIX vs 15 on Windows — `GameConnectedChatLeave_t` (20 vs 18), `GSClientGroupStatus_t` (20 vs 18), `P2PSessionConnectFail_t` (12 vs 9), `PSNGameBootInviteResult_t` (12 vs 9, offset wrong). The Windows-only F1a–F1d defects vanish on POSIX because `Pack = 4` is the *correct* pack there. This asymmetry is itself diagnostic: it confirms the root cause is `Pack` selection, not field ordering.
+Rebuilt and re-measured against `VALVE_CALLBACK_PACK_SMALL` (pack 4). Only **4** real mismatches on POSIX vs 15 on Windows — `GameConnectedChatLeave_t` (20 vs 18), `GSClientGroupStatus_t` (20 vs 18), `P2PSessionConnectFail_t` (12 vs 9), `PSNGameBootInviteResult_t` (12 vs 9, offset wrong). The Windows-only F1a–F1d defects vanished on POSIX because `Pack = 4` is the *correct* pack there. That asymmetry was itself diagnostic: it confirmed the root cause was `Pack` selection, not field ordering.
+
+**After the fix, POSIX is clean too** — all four measure their header-derived size (18, 18, 9, 9), and `PSNGameBootInviteResult_t` puts its `CSteamID` at offset 1 as the header requires. `RequestPlayersForGameResultCallback_t`, which the automated diff cannot resolve, measures **56** on POSIX and **64** on Windows, both matching the F1a table. The header-derived diff reports 0 real mismatches on both targets.
 
 ---
 
 ## Open questions / things that need a live Steam client to settle
 
-1. **Does `ISteamUtils::GetAPICallResult` reject a short `cubCallback`?** (F3) The 20-vs-24 size mismatch on `UserStatsReceived_t` is proven; whether it makes `RequestUserStats` return `null` forever or merely truncate depends on Steam's internal check, which is not visible in the headers. A one-line live test (`await SteamUserStats.RequestUserStats(myId)` and check for non-null) settles it.
+1. ~~**Does `ISteamUtils::GetAPICallResult` reject a short `cubCallback`?**~~ (F3) **Moot.** `UserStatsReceived_t` now measures 24, matching the header, so the value passed is correct whichever way Steam checks it. The question is still interesting for the general case but no longer gates anything here.
 
-2. **Do the F2 over-reads ever fault?** Reading 2–7 bytes past a callback struct is out of bounds by definition, but whether it crosses a guard page depends on Steam's callback allocator. Only observable under a live client, ideally with Application Verifier / PageHeap on `steam_api64.dll`.
+2. ~~**Do the F2 over-reads ever fault?**~~ **Moot.** All nine over-reads are gone; `Marshal.SizeOf` now equals the native size for every one of them, so nothing reads past the buffer to begin with.
 
-3. **`CSteamID` alignment.** The claim `alignof(CSteamID) == 1` follows directly from `#pragma pack( push, 1 )` at `steamclientpublic.h:475` enclosing the class at line 480, and it is the premise the generator itself already encodes (`Platform.StructPackSize = 4`). It has not been *measured*, because there is no C++ compiler here. A definitive check would be a 5-line C++ TU compiled with MSVC printing `sizeof`/`alignof`/`offsetof` for `AvatarImageLoaded_t` and `SubmitPlayerResultResultCallback_t` — that would confirm or refute F1 and F2 in one shot and is worth adding to CI. Failing that, a managed test that reads a live `AvatarImageLoaded_t` and checks `msg.DataSize == 20` would do it.
+3. **`CSteamID` alignment.** *This is the one premise the whole fix rests on, so it deserves restating.* `alignof(CSteamID) == alignof(CGameID) == 1` follows directly from `#pragma pack( push, 1 )` at `steamclientpublic.h:475`, which encloses `class CSteamID` (:480) and `class CGameID` (:922) and is not popped until :1108 — all four line numbers verified against the committed header text. It has not been *measured*, because there is no C++ compiler on this machine. A definitive check would be a 5-line C++ TU compiled with MSVC printing `sizeof`/`alignof`/`offsetof` for `AvatarImageLoaded_t` and `SubmitPlayerResultResultCallback_t`, and it is worth adding to CI. Failing that, a managed test that reads a live `AvatarImageLoaded_t` and checks `msg.DataSize == 20` would do it.
+
+   Note the corroborating evidence: the pre-fix layouts were correct for 17 of the 40 id-bearing structs *precisely* on the arithmetic this premise predicts — the ones where a 4-byte field preceded the id, so a pack-4 `ulong` happened to land on the align-1 native offset. If `CSteamID` were 8-aligned, that pattern would be inexplicable.
 
 4. **Win32 (x86) target.** `Facepunch.Steamworks.Win32` ships as a NuGet package and uses the same `StructPlatformPackSize = 8` / `StructPackSize = 4` constants, so the same class of defect applies. I could not measure it: no x86 .NET runtime is installed (`C:\Program Files (x86)\dotnet` absent), and pointer size (4 vs 8) changes offsets for any struct containing a `const char *`. The x64 findings should be re-run under an x86 host before assuming they transfer.
 
@@ -605,7 +662,9 @@ All harnesses are outside the repository, in
 |---|---|
 | `LayoutProbe/` | Reflects `Facepunch.Steamworks.Win64.dll`, emits `Marshal.SizeOf`/`OffsetOf` for 337 types → `layout.json` |
 | `LayoutProbePosix/` | Same for `Facepunch.Steamworks.Posix.dll` → `layout-posix.json` |
-| `cpplayout.js` | Recovers `#pragma pack` context from the headers, computes MSVC x64 layouts from `steam_api.json`, diffs against the measured JSON. `TARGET=posix` for the POSIX pass, `VERBOSE=1` for per-field dumps |
+| `cpplayout.js` | Recovers `#pragma pack` context from the headers, computes MSVC x64 layouts from `steam_api.json`, diffs against the measured JSON. `VERBOSE=1` for per-field dumps |
+| `cpplayout2.js` | **Use this one for the POSIX pass.** Identical to `cpplayout.js` except that `TARGET=posix` also switches the *managed* input to `layout-posix.json`; `cpplayout.js` switches only the C++ side, so `TARGET=posix node cpplayout.js` compares POSIX C++ against the Windows assembly and reports ~88 spurious mismatches |
+| `idsurvey.js` | Lists every struct containing a `CSteamID`/`CGameID` member (transitively), header-derived layout beside measured, for reviewing the F1/F2/F3 fix |
 | `PinvokeProbe/` | Audits all 1018 P/Invoke signatures (calling convention, bool marshaling, string params, struct returns) |
 | `CharSetProbe/` | Lists every struct with `ByValTStr` fields and its effective `CharSet` |
 | `CharSetRepro/` | Round-trips real strings through the two `[StructLayout]` shapes and prints raw bytes (evidence for F4) |
@@ -613,10 +672,20 @@ All harnesses are outside the repository, in
 
 ```
 export PATH="/c/dotnet:$PATH"; export DOTNET_ROOT="C:\\dotnet"
+
+# Windows x64
 dotnet build Facepunch.Steamworks/Facepunch.Steamworks.Win64.csproj -f net6.0 -c Release
 dotnet run --project <scratchpad>/LayoutProbe/LayoutProbe.csproj -c Release -- <scratchpad>/layout.json
-node <scratchpad>/cpplayout.js            # Windows x64 diff
-TARGET=posix node <scratchpad>/cpplayout.js
+node <scratchpad>/cpplayout.js
+
+# POSIX x64 - note both halves have to be switched over
+dotnet build Facepunch.Steamworks/Facepunch.Steamworks.Posix.csproj -f net6.0 -c Release
+dotnet run --project <scratchpad>/LayoutProbePosix/LayoutProbePosix.csproj -c Release -- <scratchpad>/layout-posix.json
+TARGET=posix node <scratchpad>/cpplayout2.js
 ```
+
+Expected output after the F1/F2/F3 fix: `4 MISMATCH` on both targets, all four
+`FIELDCOUNT`-only on the hand-written structs listed in *Verified-correct areas*, with
+`cppSize == csSize` on every one. Anything else is a regression.
 
 None of these touch Steam.

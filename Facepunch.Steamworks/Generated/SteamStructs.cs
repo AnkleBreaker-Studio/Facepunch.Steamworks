@@ -6,14 +6,14 @@ using System.Threading.Tasks;
 
 namespace Steamworks.Data
 {
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct FriendGameInfo_t
 	{
-		internal GameId GameID; // m_gameID CGameID
+		internal PackedId GameID; // m_gameID CGameID
 		internal uint GameIP; // m_unGameIP uint32
 		internal ushort GamePort; // m_usGamePort uint16
 		internal ushort QueryPort; // m_usQueryPort uint16
-		internal ulong SteamIDLobby; // m_steamIDLobby CSteamID
+		internal PackedId SteamIDLobby; // m_steamIDLobby CSteamID
 		
 	}
 	
@@ -26,7 +26,7 @@ namespace Steamworks.Data
 		
 	}
 	
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal unsafe partial struct gameserveritem_t
 	{
 		internal servernetadr_t NetAdr; // m_NetAdr servernetadr_t
@@ -55,7 +55,7 @@ namespace Steamworks.Data
 		internal fixed byte ServerName[64]; // m_szServerName char [64]
 		internal string GameTagsUTF8() { fixed ( byte* b = GameTags ) return Steamworks.Utility.ReadNullTerminatedUTF8String( b, 128 ); }
 		internal fixed byte GameTags[128]; // m_szGameTags char [128]
-		internal ulong SteamID; // m_steamID CSteamID
+		internal PackedId SteamID; // m_steamID CSteamID
 		
 	}
 	
@@ -78,7 +78,7 @@ namespace Steamworks.Data
 	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
 	internal struct LeaderboardEntry_t
 	{
-		internal ulong SteamIDUser; // m_steamIDUser CSteamID
+		internal PackedId SteamIDUser; // m_steamIDUser CSteamID
 		internal int GlobalRank; // m_nGlobalRank int32
 		internal int Score; // m_nScore int32
 		internal int CDetails; // m_cDetails int32
