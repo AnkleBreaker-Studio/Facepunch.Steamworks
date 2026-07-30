@@ -43,7 +43,7 @@ rather than documented.
 | [Ping locations & certificates](sdr/ping-locations-and-certificates.md) | Latency estimation without pinging, POP enumeration, running SDR without a Steam login |
 
 For *when* to reach for SDR at all, start with
-[Networking transports §6](guides/04-networking-transports.md#6--sdr--when-and-how).
+[Networking transports §6](guides/04-networking-transports.md#6-sdr--when-and-how).
 
 ## Audits
 
