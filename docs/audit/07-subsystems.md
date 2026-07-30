@@ -67,10 +67,32 @@ was used**, consistent with reports 00–06.
 pass ran. Line numbers are accurate as of commit `e1635e9`, but
 `Facepunch.Steamworks/Structs/UgcQuery.cs` in particular had uncommitted modifications. Every
 finding therefore quotes the code verbatim and names the enclosing method; if a line number has
-drifted, search for the quoted text. One claim inherited from a first-pass sweep — that
-`Query.InLanguage()` was dead code — **was already fixed** by a concurrent session before this
-report was written, was re-checked against the working tree, and has been dropped. It is
-mentioned only to record that it was checked.
+drifted, search for the quoted text.
+
+### Overlap with concurrent work
+
+A documentation pass was rewriting `SteamUgc.cs`, `UgcQuery.cs` and `SteamInventory.cs` while
+this audit ran, and fixed live bugs as it went (`1b3504a`). Checked against it, so the two do
+not contradict each other:
+
+- **`Query.InLanguage()` was dead code — already fixed, claim dropped.** A first-pass sweep
+  flagged it; re-checking the working tree showed `SetLanguage` is now wired up. It appears in
+  *Verified-correct* rather than as a finding, to record that it was examined.
+- **Three fixes in `1b3504a` do not overlap this report**: `InLanguage`, the
+  `result.Value.Result`-on-a-null-`CallResult` crash in the playtime-tracking methods, and the
+  unterminatable `DownloadAsync` polling loop. All three are real; none is re-reported here.
+- **S4 partly overlaps in-flight documentation.** That pass is adding `<remarks>` to
+  `SteamInventory` stating that results own a native handle and must be disposed — which
+  addresses the *documentation* half of S4. It explicitly does **not** fix the leaks: its own
+  text says the `SteamInventoryFullUpdate_t` handler "does not dispose it", which is the
+  behaviour S4 reports. The three leaks and the missing per-method `<remarks>` on the other ten
+  entry points stand. Note also that the example it adds uses
+  `using ( var inventory = result.Value )` — correct as written for a single use, but it binds a
+  **copy** of the struct, so it is only safe while S13 (non-idempotent `Dispose`) is unfixed in
+  the direction that matters. Fixing S13 first, as the backlog says, keeps that example valid.
+
+Nothing in this report was written against code a concurrent session had already changed
+without that being re-verified against the working tree.
 
 ---
 
@@ -479,9 +501,11 @@ public entry points handing an owned result handle to the caller: 11
     SteamInventory.GrantPromoItemsAsync SteamInventory.TriggerItemDropAsync
 ```
 
-None of their XML docs mention disposal. `InventoryResult` is a `struct`, so no finalizer can
-rescue a caller who does not know. Report 05 measured `<param>` documentation at 11.8%; this is
-what that costs in practice.
+At the time of the audit none of their XML docs mentioned disposal; a concurrent documentation
+pass is now adding that to the `SteamInventory` class `<remarks>` (see *Overlap with concurrent
+work*), but not to the individual methods, and it does not change the leaks above.
+`InventoryResult` is a `struct`, so no finalizer can rescue a caller who does not know. Report
+05 measured `<param>` documentation at 11.8%; this is what that costs in practice.
 
 There is also an aliasing hazard: `GetAllItemsAsync` returns a result wrapping handle *H*, and
 the `SteamInventoryFullUpdate_t` callback then constructs a second `InventoryResult` around the
