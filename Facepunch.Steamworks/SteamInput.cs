@@ -59,18 +59,24 @@ namespace Steamworks
         /// <param name="controller"></param>
         /// <param name="action"></param>
         /// <returns></returns>
-        public static string GetDigitalActionGlyph( Controller controller, string action )
+        public static unsafe string GetDigitalActionGlyph( Controller controller, string action )
         {
-            InputActionOrigin origin = InputActionOrigin.None;
+            // Steam writes up to STEAM_INPUT_MAX_ORIGINS entries here - an action can be bound
+            // to several inputs at once. stackalloc so the correct-sized buffer costs nothing.
+            InputActionOrigin* origins = stackalloc InputActionOrigin[ISteamInput.STEAM_INPUT_MAX_ORIGINS];
 
-            Internal.GetDigitalActionOrigins(
+            var count = Internal.GetDigitalActionOrigins(
                 controller.Handle,
                 Internal.GetCurrentActionSet(controller.Handle),
                 GetDigitalActionHandle(action),
-                ref origin
+                origins,
+                ISteamInput.STEAM_INPUT_MAX_ORIGINS
             );
 
-            return Internal.GetGlyphForActionOrigin_Legacy(origin);
+            if ( count <= 0 )
+                return null;
+
+            return Internal.GetGlyphForActionOrigin_Legacy(origins[0]);
         }
 
 
@@ -79,13 +85,16 @@ namespace Steamworks
 		/// action set in use for the controller will be used for the lookup. You should cache the result and
 		/// maintain your own list of loaded PNG assets.
 		/// </summary>
-		public static string GetPngActionGlyph( Controller controller, string action, GlyphSize size )
+		public static unsafe string GetPngActionGlyph( Controller controller, string action, GlyphSize size )
 		{
-			InputActionOrigin origin = InputActionOrigin.None;
+			InputActionOrigin* origins = stackalloc InputActionOrigin[ISteamInput.STEAM_INPUT_MAX_ORIGINS];
 
-			Internal.GetDigitalActionOrigins( controller.Handle, Internal.GetCurrentActionSet( controller.Handle ), GetDigitalActionHandle( action ), ref origin );
+			var count = Internal.GetDigitalActionOrigins( controller.Handle, Internal.GetCurrentActionSet( controller.Handle ), GetDigitalActionHandle( action ), origins, ISteamInput.STEAM_INPUT_MAX_ORIGINS );
 
-			return Internal.GetGlyphPNGForActionOrigin( origin, size, 0 );
+			if ( count <= 0 )
+				return null;
+
+			return Internal.GetGlyphPNGForActionOrigin( origins[0], size, 0 );
 		}
 
 		/// <summary>
@@ -93,13 +102,16 @@ namespace Steamworks
 		/// action set in use for the controller will be used for the lookup. You should cache the result and
 		/// maintain your own list of loaded PNG assets.
 		/// </summary>
-		public static string GetSvgActionGlyph( Controller controller, string action )
+		public static unsafe string GetSvgActionGlyph( Controller controller, string action )
 		{
-			InputActionOrigin origin = InputActionOrigin.None;
+			InputActionOrigin* origins = stackalloc InputActionOrigin[ISteamInput.STEAM_INPUT_MAX_ORIGINS];
 
-			Internal.GetDigitalActionOrigins( controller.Handle, Internal.GetCurrentActionSet( controller.Handle ), GetDigitalActionHandle( action ), ref origin );
+			var count = Internal.GetDigitalActionOrigins( controller.Handle, Internal.GetCurrentActionSet( controller.Handle ), GetDigitalActionHandle( action ), origins, ISteamInput.STEAM_INPUT_MAX_ORIGINS );
 
-			return Internal.GetGlyphSVGForActionOrigin( origin, 0 );
+			if ( count <= 0 )
+				return null;
+
+			return Internal.GetGlyphSVGForActionOrigin( origins[0], 0 );
 		}
 
 		internal static Dictionary<string, InputDigitalActionHandle_t> DigitalHandles = new Dictionary<string, InputDigitalActionHandle_t>();
