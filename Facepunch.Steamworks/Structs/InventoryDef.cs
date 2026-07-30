@@ -98,8 +98,6 @@ namespace Steamworks
 			if ( _properties!= null && _properties.TryGetValue( name, out string val ) )
 				return val;
 
-			uint _ = (uint)Helpers.MemoryBufferSize;
-
 			if ( !SteamInventory.Internal.GetItemDefinitionProperty( Id, name, out var vl ) )
 				return null;
 				
