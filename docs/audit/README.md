@@ -1,4 +1,4 @@
-# Audit set — AnkleBreaker fork of Facepunch.Steamworks
+﻿# Audit set — AnkleBreaker fork of Facepunch.Steamworks
 
 A full-codebase audit run on 2026-07-28 against `master`. Six workstreams, each producing
 an evidence-backed report. **Every finding is verified** — against the SDK headers in
@@ -38,6 +38,15 @@ out to be a strength — those techniques are reproducible in CI, and they found
 | `Utility.ToType<T>` boxed every callback struct — 32–320 bytes per handler per delivery, forever | Medium | 02 |
 | `Newtonsoft.Json 9.0.2-beta1` (GHSA-5crp-9r3c-p9vr) referenced but unused by both test projects | Medium | 05 |
 | PS5 DualSense adaptive triggers unsupported — exported and declared, but the generator cannot emit its C `union` | Medium | 00 |
+| **`OnMessage` received `messageNum` and `recvTime` transposed** on both `SocketManager` and `ConnectionManager` — every consumer got a microsecond timestamp as the message number and a sequence counter as the receive time. **Behaviour change:** anyone who compensated for the swap in their own handler must remove that compensation | High | 06 |
+| `SocketManager.Receive` leaked the rest of the batch when a handler threw — the unprocessed `NetMsg*` from that native call were never released back to Steam | High | 06 |
+| `NetErrorMessage` declared `fixed char[1024]` for a native `char[1024]`, i.e. 2048 bytes for 1024, and its contents were unreadable as declared (Steam writes UTF-8) | Medium | 01 |
+| Generated UTF-8 accessors threw `ArgumentOutOfRangeException` when Steam filled a buffer with no terminator — `Array.IndexOf` returns `-1` | Medium | 06 |
+| 51 `ByValArray byte[]` fields heap-allocated on every marshal — `SteamUGCDetails_t` cost 19,616 B per workshop item, and several were callback structs allocating per delivery | High | 06 |
+| The dedicated-server receive loop allocated per tick and per message — ~460 KB/s of garbage on a 100-player server | High | 06 |
+| Seven enumerators re-queried their count through the native boundary every iteration, doubling interop transitions | Medium | 06 |
+| Steam Deck floating keyboard and both text-input dismiss calls were bound but unreachable (one was commented out with the wrong return type) | Medium | 03 |
+| Complete SDR surface unexposed — poll groups, hosted dedicated servers, ping locations, POPs, certificates | High | 03 |
 
 ### Open, ranked by severity
 
