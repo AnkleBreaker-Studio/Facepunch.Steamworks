@@ -293,7 +293,35 @@ namespace Steamworks
 		/// <summary>
 		/// Install a global callback. The passed function will get called if it's all good.
 		/// </summary>
-		internal static void Install<T>( Action<T> p, bool server = false ) where T : ICallbackData
+		/// <remarks>
+		/// <para>
+		/// <b>Why <c>T</c> is constrained to <c>unmanaged</c>.</b> The delegate built here is
+		/// the general callback delivery path: it runs once per registered handler per
+		/// delivered callback, for the lifetime of the process. It used to read the callback
+		/// with <c>ToType&lt;T&gt;</c>, i.e. <c>Marshal.PtrToStructure</c>, which boxes -
+		/// both overloads allocate <c>sizeof(T) + 16</c> bytes, and for a non-blittable
+		/// struct it also walks the field list one member at a time.
+		/// </para>
+		/// <para>
+		/// The <c>unmanaged</c> constraint is the compiler proving the callback struct
+		/// contains no managed references, which is exactly the precondition for reading it
+		/// with a raw pointer dereference. So the constraint is not a restriction bolted on
+		/// top of the fast path - it <i>is</i> the fast path's safety proof, checked at
+		/// compile time rather than trusted.
+		/// </para>
+		/// <para>
+		/// Every callback registered in this library satisfies it. Of the 217 structs
+		/// implementing <see cref="ICallbackData"/>, 203 are <c>unmanaged</c>; the 14 that
+		/// are not are all <c>HTML_*</c>, which hold <c>const char *</c> as a real
+		/// out-of-line pointer rather than an inline buffer, and none of them are registered
+		/// here. If ISteamHTMLSurface is ever given a managed facade, those callbacks will
+		/// fail to compile against this method - deliberately. They need a marshalling
+		/// variant of this method built on <c>Marshal.PtrToStructure</c>; they must not be
+		/// forced through the raw read, which would interpret the string pointer as inline
+		/// bytes.
+		/// </para>
+		/// </remarks>
+		internal static void Install<T>( Action<T> p, bool server = false ) where T : unmanaged, ICallbackData
 		{
 			var t = default( T );
 			var type = t.CallbackType;
@@ -306,7 +334,7 @@ namespace Steamworks
 
 			list.Add( new Callback
 			{
-				action = x => p( x.ToType<T>() ),
+				action = x => p( x.ToTypeUnmanaged<T>() ),
 				server = server
 			} );
 		}

@@ -112,7 +112,7 @@ namespace Steamworks.Data
 				var id = this;
 
 				var addrptr = InternalGetIPAddr( ref id );
-				return addrptr.ToType<NetAddress>();
+				return addrptr.ToTypeUnmanaged<NetAddress>();
 			}
 		}
 		

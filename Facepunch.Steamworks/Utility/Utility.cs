@@ -13,19 +13,21 @@ namespace Steamworks
 	    public static readonly Encoding Utf8NoBom = new UTF8Encoding( false, false );
 
         /// <summary>
-        /// Reads a native struct out of unmanaged memory.
+        /// Reads a blittable native struct out of unmanaged memory with no allocation.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>This allocates, and it is on the hottest path in the library.</b> It runs once
-        /// per registered handler per delivered callback, so the cost is paid continuously
-        /// for the lifetime of the process.
+        /// This is the only generic struct reader in the library, and it is on its hottest
+        /// path - it runs once per registered handler per delivered callback, so the cost is
+        /// paid continuously for the lifetime of the process.
         /// </para>
         /// <para>
-        /// Both <c>Marshal.PtrToStructure</c> overloads box. The generic
-        /// <c>PtrToStructure&lt;T&gt;</c> looks like it should not, but internally it does
-        /// <c>Activator.CreateInstance</c> into an <c>object</c>, fills that, and unboxes on
-        /// return. Measured on CoreCLR with a blittable 24-byte struct:
+        /// <b>It used to be <c>Marshal.PtrToStructure</c>, which boxes.</b> Keep that in
+        /// mind before reaching for <c>PtrToStructure</c> again anywhere near a callback.
+        /// <i>Both</i> of its overloads allocate: the generic <c>PtrToStructure&lt;T&gt;</c>
+        /// looks like it should not, but internally it creates an <c>object</c>, marshals
+        /// into that, and unboxes on return. Measured on CoreCLR with a blittable 24-byte
+        /// struct:
         /// </para>
         /// <code>
         ///   PtrToStructure&lt;T&gt;( ptr )            40 B/op    126 ns/op
@@ -33,50 +35,27 @@ namespace Steamworks
         ///   *(T*)ptr                              0 B/op    8.5 ns/op
         /// </code>
         /// <para>
-        /// 40 bytes is exactly <c>sizeof(T) + 16</c>, i.e. one boxed instance. So the two
-        /// overloads are equivalent - swapping between them changes nothing, and an earlier
-        /// attempt to "fix" this by switching overloads was measured to have no effect.
-        /// Do not repeat it.
+        /// 40 bytes is exactly <c>sizeof(T) + 16</c>, one boxed instance, and it grows with
+        /// the struct. The two overloads are equivalent, so swapping between them changes
+        /// nothing - an earlier attempt to "fix" the allocation that way was measured to
+        /// have no effect. Do not repeat it. For a non-blittable struct
+        /// <c>PtrToStructure</c> additionally walks the field list one member at a time,
+        /// which cost 3,932 ns per delivery of the connection-status callback before
+        /// <c>ConnectionInfo</c> was made blittable.
         /// </para>
         /// <para>
-        /// The real fix is a raw pointer read, which is ~14x faster and allocates nothing.
-        /// It requires <c>where T : unmanaged</c>, which the C# compiler will only accept
-        /// for blittable types - and several callback structs are not blittable today
-        /// because they carry <c>[MarshalAs(ByValTStr)] string</c> fields (see
-        /// <c>ConnectionInfo</c>). Converting those to <c>fixed byte</c> with on-demand
-        /// decoding is what unlocks this. Tracked in <c>docs/audit/06-performance.md</c>;
-        /// it is sequenced behind the struct-layout work because it changes marshalled
-        /// layout and must move the baseline in <c>Tools/baselines/</c> deliberately.
+        /// The <c>unmanaged</c> constraint is what makes the raw read safe, and it is
+        /// checked by the compiler rather than trusted: it refuses any type containing a
+        /// managed reference (such as a <c>[MarshalAs(ByValTStr)] string</c> field), which
+        /// is exactly the set that genuinely needs marshalling. A type that will not satisfy
+        /// it cannot use this path at all and needs a <c>Marshal.PtrToStructure</c> call
+        /// written at its own call site, where the cost is visible.
         /// </para>
         /// <para>
-        /// Where the type IS statically known to be blittable, call
-        /// <see cref="ToTypeUnmanaged{T}"/> instead - it is the zero-allocation path.
-        /// </para>
-        /// </remarks>
-        static internal T ToType<T>( this IntPtr ptr )
-        {
-            if ( ptr == IntPtr.Zero )
-                return default;
-
-            return Marshal.PtrToStructure<T>( ptr );
-        }
-
-        /// <summary>
-        /// Reads a blittable native struct out of unmanaged memory with no allocation.
-        /// </summary>
-        /// <remarks>
-        /// The zero-allocation counterpart to <see cref="ToType{T}"/>: measured at 0 bytes
-        /// and ~8.5 ns/op against 40 bytes and ~126 ns/op for <c>Marshal.PtrToStructure</c>.
-        ///
-        /// The <c>unmanaged</c> constraint is what makes this safe - the compiler refuses
-        /// any type containing a reference (such as a <c>[MarshalAs(ByValTStr)] string</c>
-        /// field), which is exactly the set that needs real marshalling. If a type will not
-        /// satisfy the constraint, it genuinely cannot use this path; use
-        /// <see cref="ToType{T}"/> for it.
-        ///
         /// Deliberately not written using <c>System.Runtime.CompilerServices.Unsafe</c>:
         /// that would add a NuGet dependency to a library shipped into Unity projects as
         /// loose DLLs, and a plain pointer dereference measures identically.
+        /// </para>
         /// </remarks>
         static internal unsafe T ToTypeUnmanaged<T>( this IntPtr ptr ) where T : unmanaged
         {
